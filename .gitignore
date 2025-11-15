@@ -131,6 +131,32 @@ AssetStore/
 # VS Code
 .vscode/
 
+# Visual Studio for Mac
+.vsmac/
+*.userprefs
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Sublime Text
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+*.sublime-workspace
+*.sublime-project
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -139,6 +165,36 @@ AssetStore/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Additional macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
 
 # Large asset files (add to .gitignore to prevent pushing to repo)
 # Audio files
@@ -200,6 +256,40 @@ Thumbs.db
 # Unity package temporary files
 *.unitypackage.tmp
 *.unitypackage.bak
+
+# Unity Collaborate/Version Control
+*.ucache
+*.ucache.meta
+*.upackages
+*.upackages.meta
+
+# Unity Analytics
+Analytics/
+
+# Unity Hub cache
+UnityHub/
+
+# Crash dumps and memory dumps
+*.dmp
+*.stackdump
+*.minidump
+*.mdmp
+*.core
+
+# Additional backup files
+*.bak
+*.backup
+*.orig
+*.old
+*~
+
+# Editor state and cache files
+*.userprefs
+*.prefs
+*.cache
+
+# Unity Test Runner
+*.TestRunner.dll.meta
 
 # Temporary files
 *.tmp
