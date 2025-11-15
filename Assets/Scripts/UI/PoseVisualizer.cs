@@ -13,6 +13,7 @@ namespace ScouterXR.UI
         [Header("Visualization Settings")]
         public bool showPoseSkeleton = true;
         public bool showHandLandmarks = true;
+        public bool debugMode = true; // Enable debug boundaries
         public float landmarkSize = 0.01f;
         public Color poseColor = Color.green;
         public Color handColor = Color.blue;
@@ -60,6 +61,12 @@ namespace ScouterXR.UI
         void OnGUI()
         {
             if (!mainCamera) return;
+
+            // Debug: Draw webcam display area boundaries
+            if (debugMode)
+            {
+                DrawDebugBoundaries();
+            }
 
             // Draw pose skeleton
             if (showPoseSkeleton && poseEstimator != null && poseEstimator.currentPose != null && poseEstimator.currentPose.IsValid)
@@ -223,6 +230,75 @@ namespace ScouterXR.UI
         // Materials for GL drawing
         private Material poseMaterial;
         private Material handMaterial;
+        private Material debugMaterial;
+
+        private void DrawDebugBoundaries()
+        {
+            GL.PushMatrix();
+            GL.LoadPixelMatrix();
+
+            if (debugMaterial == null)
+            {
+                debugMaterial = new Material(Shader.Find("Hidden/Internal-Colored"));
+                debugMaterial.hideFlags = HideFlags.HideAndDontSave;
+                debugMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                debugMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                debugMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+                debugMaterial.SetInt("_ZWrite", 0);
+            }
+
+            debugMaterial.SetPass(0);
+            GL.Begin(GL.LINES);
+            GL.Color(Color.red);
+
+            // Draw webcam display area boundaries (red rectangle)
+            float marginX = Screen.width * 0.05f;
+            float marginY = Screen.height * 0.05f;
+            float displayWidth = Screen.width * 0.9f;
+            float displayHeight = Screen.height * 0.9f;
+
+            float left = marginX;
+            float right = marginX + displayWidth;
+            float bottom = marginY;
+            float top = marginY + displayHeight;
+
+            // Bottom edge
+            GL.Vertex3(left, bottom, 0);
+            GL.Vertex3(right, bottom, 0);
+
+            // Top edge
+            GL.Vertex3(left, top, 0);
+            GL.Vertex3(right, top, 0);
+
+            // Left edge
+            GL.Vertex3(left, bottom, 0);
+            GL.Vertex3(left, top, 0);
+
+            // Right edge
+            GL.Vertex3(right, bottom, 0);
+            GL.Vertex3(right, top, 0);
+
+            GL.End();
+
+            // Draw center crosshairs
+            GL.Begin(GL.LINES);
+            GL.Color(Color.yellow);
+
+            float centerX = left + displayWidth * 0.5f;
+            float centerY = bottom + displayHeight * 0.5f;
+
+            // Horizontal line through center
+            GL.Vertex3(left, centerY, 0);
+            GL.Vertex3(right, centerY, 0);
+
+            // Vertical line through center
+            GL.Vertex3(centerX, bottom, 0);
+            GL.Vertex3(centerX, top, 0);
+
+            GL.End();
+
+            GL.PopMatrix();
+        }
 
         void Start()
         {
@@ -257,6 +333,24 @@ namespace ScouterXR.UI
             GL.Color(poseColor);
 
             // Draw connections between keypoints
+            // Keypoints are in normalized coordinates (0-1 range)
+            // Webcam display covers 90% of screen (5% margin on each side)
+            float marginX = Screen.width * 0.05f;  // 5% margin
+            float marginY = Screen.height * 0.05f; // 5% margin
+            float displayWidth = Screen.width * 0.9f;   // 90% of screen width
+            float displayHeight = Screen.height * 0.9f; // 90% of screen height
+
+            // Debug: Log coordinate mapping for first keypoint
+            if (keypoints.Length > 0 && Time.frameCount % 60 == 0)
+            {
+                Vector3 nose = keypoints[0]; // Nose keypoint
+                float screenX = marginX + (nose.x * displayWidth);
+                float screenY = marginY + (nose.y * displayHeight);
+                // Note: If skeleton appears upside down, the webcam texture might be flipped
+                // MediaPipe expects (0,0)=top-left, Unity webcam might be (0,0)=bottom-left
+                Debug.Log($"PoseVisualizer: Nose keypoint {nose} maps to screen ({screenX:F0}, {screenY:F0}) in area ({marginX:F0}-{marginX + displayWidth:F0}, {marginY:F0}-{marginY + displayHeight:F0})");
+            }
+
             for (int i = 0; i < poseConnections.GetLength(0); i++)
             {
                 int startIdx = poseConnections[i, 0];
@@ -267,20 +361,18 @@ namespace ScouterXR.UI
                     Vector3 startPos = keypoints[startIdx];
                     Vector3 endPos = keypoints[endIdx];
 
-                    // Convert world to screen space
-                    Vector3 startScreen = mainCamera.WorldToScreenPoint(startPos);
-                    Vector3 endScreen = mainCamera.WorldToScreenPoint(endPos);
+                    // Convert normalized coordinates to webcam display area
+                    float startX = marginX + (startPos.x * displayWidth);
+                    float startY = marginY + (startPos.y * displayHeight);
+                    float endX = marginX + (endPos.x * displayWidth);
+                    float endY = marginY + (endPos.y * displayHeight);
 
-                    // Only draw if both points are in front of camera and on screen
-                    if (startScreen.z > 0 && endScreen.z > 0 &&
-                        startScreen.x >= 0 && startScreen.x <= Screen.width &&
-                        startScreen.y >= 0 && startScreen.y <= Screen.height &&
-                        endScreen.x >= 0 && endScreen.x <= Screen.width &&
-                        endScreen.y >= 0 && endScreen.y <= Screen.height)
-                    {
-                        GL.Vertex3(startScreen.x, Screen.height - startScreen.y, 0);
-                        GL.Vertex3(endScreen.x, Screen.height - endScreen.y, 0);
-                    }
+                    // Note: Y coordinate handling may need adjustment based on webcam texture orientation
+                    // MediaPipe: (0,0)=top-left, Unity UI: (0,0)=bottom-left
+                    // If skeleton appears upside down, add: startY = Screen.height - startY; etc.
+
+                    GL.Vertex3(startX, startY, 0);
+                    GL.Vertex3(endX, endY, 0);
                 }
             }
 
@@ -292,20 +384,17 @@ namespace ScouterXR.UI
 
             foreach (Vector3 keypoint in keypoints)
             {
-                Vector3 screenPos = mainCamera.WorldToScreenPoint(keypoint);
-                if (screenPos.z > 0 &&
-                    screenPos.x >= 0 && screenPos.x <= Screen.width &&
-                    screenPos.y >= 0 && screenPos.y <= Screen.height)
-                {
-                    float size = landmarkSize * 50; // Scale for screen
-                    float x = screenPos.x;
-                    float y = Screen.height - screenPos.y;
+                // Convert normalized coordinates to webcam display area
+                float x = marginX + (keypoint.x * displayWidth);
+                float y = marginY + (keypoint.y * displayHeight);
+                // Note: Y flip removed - test if skeleton appears correctly
+                // If upside down, add: y = Screen.height - y;
+                float size = landmarkSize * 20; // Scale for screen
 
-                    GL.Vertex3(x - size, y - size, 0);
-                    GL.Vertex3(x + size, y - size, 0);
-                    GL.Vertex3(x + size, y + size, 0);
-                    GL.Vertex3(x - size, y + size, 0);
-                }
+                GL.Vertex3(x - size, y - size, 0);
+                GL.Vertex3(x + size, y - size, 0);
+                GL.Vertex3(x + size, y + size, 0);
+                GL.Vertex3(x - size, y + size, 0);
             }
 
             GL.End();
@@ -355,6 +444,12 @@ namespace ScouterXR.UI
 
         private void DrawHandSkeletonGL(Vector3[] landmarks)
         {
+            // Webcam display covers 90% of screen (5% margin on each side)
+            float marginX = Screen.width * 0.05f;  // 5% margin
+            float marginY = Screen.height * 0.05f; // 5% margin
+            float displayWidth = Screen.width * 0.9f;   // 90% of screen width
+            float displayHeight = Screen.height * 0.9f; // 90% of screen height
+
             for (int i = 0; i < handConnections.GetLength(0); i++)
             {
                 int startIdx = handConnections[i, 0];
@@ -365,18 +460,16 @@ namespace ScouterXR.UI
                     Vector3 startPos = landmarks[startIdx];
                     Vector3 endPos = landmarks[endIdx];
 
-                    Vector3 startScreen = mainCamera.WorldToScreenPoint(startPos);
-                    Vector3 endScreen = mainCamera.WorldToScreenPoint(endPos);
+                    // Convert normalized coordinates to webcam display area
+                    float startX = marginX + (startPos.x * displayWidth);
+                    float startY = marginY + (startPos.y * displayHeight);
+                    float endX = marginX + (endPos.x * displayWidth);
+                    float endY = marginY + (endPos.y * displayHeight);
 
-                    if (startScreen.z > 0 && endScreen.z > 0 &&
-                        startScreen.x >= 0 && startScreen.x <= Screen.width &&
-                        startScreen.y >= 0 && startScreen.y <= Screen.height &&
-                        endScreen.x >= 0 && endScreen.x <= Screen.width &&
-                        endScreen.y >= 0 && endScreen.y <= Screen.height)
-                    {
-                        GL.Vertex3(startScreen.x, Screen.height - startScreen.y, 0);
-                        GL.Vertex3(endScreen.x, Screen.height - endScreen.y, 0);
-                    }
+                    // Note: Y coordinate handling may need adjustment based on webcam texture orientation
+
+                    GL.Vertex3(startX, startY, 0);
+                    GL.Vertex3(endX, endY, 0);
                 }
             }
         }

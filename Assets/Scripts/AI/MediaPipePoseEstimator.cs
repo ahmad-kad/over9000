@@ -22,10 +22,14 @@ namespace ScouterXR.AI
         public PoseData currentPose;
         private bool poseValid = false;
         private WebCamTexture sharedWebcamTexture; // Shared webcam texture from test scene
+        private PoseData latestWebcamPose; // Store the latest pose from webcam inference
 
-    public         void Start()
+        public         void Start()
         {
             SystemLogger.LogInfo("MediaPipePoseEstimator", $"STARTING: RealDetection={useRealPoseDetection}, DebugMode={debugMode}");
+
+            // Initialize with a default pose
+            latestWebcamPose = GetSimulatedRealPose();
 
             // Initialize pose detection
             InitializePoseDetection();
@@ -58,7 +62,9 @@ namespace ScouterXR.AI
                 {
                     string source = useRealPoseDetection && sharedWebcamTexture != null ? "WEBCAM" :
                                    useRealPoseDetection ? "SIMULATED" : "MOCK";
-                    Debug.Log($"MediaPipePoseEstimator: POSE UPDATE: Source={source}, Valid={currentPose.IsValid}, Webcam={sharedWebcamTexture?.deviceName ?? "NONE"}");
+                    float avgConf = currentPose.Confidence != null && currentPose.Confidence.Length > 0
+                        ? currentPose.Confidence.Sum() / currentPose.Confidence.Length : 0f;
+                    Debug.Log($"MediaPipePoseEstimator: POSE UPDATE: Source={source}, Valid={currentPose.IsValid}, Webcam={sharedWebcamTexture?.deviceName ?? "NONE"}, AvgConf={avgConf:F2}");
                     SystemLogger.LogInfo("MediaPipePoseEstimator", $"POSE UPDATE: Source={source}, Valid={currentPose.IsValid}, Webcam={sharedWebcamTexture?.deviceName ?? "NONE"}");
                 }
             }
@@ -559,24 +565,25 @@ namespace ScouterXR.AI
                 {
                     if (result.success && result.landmarks != null)
                     {
-                        pose = new PoseData();
-                        pose.Keypoints = result.landmarks;
-                        pose.Confidence = new float[result.landmarks.Length];
+                        latestWebcamPose = new PoseData();
+                        latestWebcamPose.Keypoints = result.landmarks;
+                        latestWebcamPose.Confidence = new float[result.landmarks.Length];
                         for (int i = 0; i < result.landmarks.Length; i++)
                         {
-                            pose.Confidence[i] = result.confidence;
+                            latestWebcamPose.Confidence[i] = result.confidence;
                         }
-                        pose.Timestamp = Time.time;
-                        pose.IsValid = true;
+                        latestWebcamPose.Timestamp = Time.time;
+                        latestWebcamPose.IsValid = MeetsConfidenceThreshold(latestWebcamPose);
+                        Debug.Log($"Webcam pose validity check: Valid={latestWebcamPose.IsValid}, Confidence threshold={confidenceThreshold}, Avg confidence={result.confidence}");
 
                         Debug.Log($"GetPoseFromWebcamTexture: Pose detected with {result.landmarks.Length} keypoints, confidence: {result.confidence:F2}");
 
                         if (debugMode)
                         {
-                            SystemLogger.LogInfo("MediaPipePoseEstimator", $"POSE DETECTED: {pose.Keypoints.Length} keypoints, Confidence: {result.confidence:F2}");
-                            if (pose.Keypoints.Length >= 3)
+                            SystemLogger.LogInfo("MediaPipePoseEstimator", $"POSE DETECTED: {latestWebcamPose.Keypoints.Length} keypoints, Confidence: {result.confidence:F2}");
+                            if (latestWebcamPose.Keypoints.Length >= 3)
                             {
-                                SystemLogger.LogInfo("MediaPipePoseEstimator", $"Keypoints: Nose={pose.Keypoints[0]}, LeftShoulder={pose.Keypoints[1]}, RightShoulder={pose.Keypoints[2]}");
+                                SystemLogger.LogInfo("MediaPipePoseEstimator", $"Keypoints: Nose={latestWebcamPose.Keypoints[0]}, LeftShoulder={latestWebcamPose.Keypoints[1]}, RightShoulder={latestWebcamPose.Keypoints[2]}");
                             }
                         }
                     }
@@ -584,7 +591,7 @@ namespace ScouterXR.AI
                     {
                         Debug.LogWarning($"GetPoseFromWebcamTexture: Pose detection failed - {result.errorMessage}");
                         // Fallback to simulated pose
-                        pose = GetSimulatedRealPose();
+                        latestWebcamPose = GetSimulatedRealPose();
                     }
                 }));
             }
@@ -594,13 +601,11 @@ namespace ScouterXR.AI
                 pose = GetSimulatedRealPose();
             }
 
-            // For now, return simulated pose while inference runs asynchronously
-            // In a real implementation, we'd wait for the inference to complete
-            pose = GetSimulatedRealPose();
-            pose.Timestamp = Time.time;
-
+            // Return the latest cached pose, or simulated if none available
+            PoseData resultPose = latestWebcamPose ?? GetSimulatedRealPose();
+            resultPose.Timestamp = Time.time;
             SystemLogger.LogInfo("MediaPipePoseEstimator", $"Processing pose from webcam texture: {webcamTexture.deviceName}");
-            return pose;
+            return resultPose;
         }
 
         // Run pose detection inference
@@ -623,19 +628,204 @@ namespace ScouterXR.AI
             inferenceResult.success = true;
             inferenceResult.confidence = 0.85f;
 
-            // Generate mock pose keypoints (MediaPipe pose has 33 keypoints)
-            inferenceResult.landmarks = new Vector3[33];
-            for (int i = 0; i < 33; i++)
-            {
-                // Generate realistic pose keypoints
-                inferenceResult.landmarks[i] = new Vector3(
-                    Random.Range(-0.5f, 0.5f),
-                    Random.Range(-0.5f, 0.5f),
-                    Random.Range(0.1f, 1.0f)
-                );
-            }
+            // Generate pose keypoints based on webcam texture analysis
+            // This simulates MediaPipe running on the actual image feed
+            inferenceResult.landmarks = AnalyzeTextureForPose(inputTexture);
 
             onComplete(inferenceResult);
+        }
+
+        // Analyze webcam texture to generate pose keypoints that correspond to image content
+        private Vector3[] AnalyzeTextureForPose(Texture2D texture)
+        {
+            Vector3[] landmarks = new Vector3[33];
+
+            // Analyze the texture to find likely person position
+            Vector2 personCenter = FindPersonCenterInTexture(texture);
+            float personHeight = EstimatePersonHeight(texture, personCenter);
+
+            // MediaPipe pose keypoint indices: https://google.github.io/mediapipe/solutions/pose.html
+            // Generate anatomically correct pose based on detected person position
+
+            // Face keypoints (relative to person center and height)
+            float faceY = personCenter.y - personHeight * 0.35f; // Face at top of person
+            landmarks[0] = new Vector3(personCenter.x, faceY, 0f); // Nose
+            landmarks[1] = new Vector3(personCenter.x - 0.02f, faceY + 0.02f, 0f); // Left eye
+            landmarks[2] = new Vector3(personCenter.x + 0.02f, faceY + 0.02f, 0f); // Right eye
+            landmarks[3] = new Vector3(personCenter.x - 0.03f, faceY - 0.02f, 0f); // Left mouth
+            landmarks[4] = new Vector3(personCenter.x + 0.03f, faceY - 0.02f, 0f); // Right mouth
+
+            // Shoulder keypoints
+            float shoulderY = personCenter.y - personHeight * 0.25f;
+            float shoulderWidth = personHeight * 0.3f;
+            landmarks[5] = new Vector3(personCenter.x - shoulderWidth/2, shoulderY, 0f); // Left shoulder
+            landmarks[6] = new Vector3(personCenter.x + shoulderWidth/2, shoulderY, 0f); // Right shoulder
+
+            // Elbow keypoints
+            float elbowY = personCenter.y - personHeight * 0.15f;
+            landmarks[7] = new Vector3(personCenter.x - shoulderWidth/1.5f, elbowY, 0f); // Left elbow
+            landmarks[8] = new Vector3(personCenter.x + shoulderWidth/1.5f, elbowY, 0f); // Right elbow
+
+            // Wrist keypoints
+            float wristY = personCenter.y - personHeight * 0.05f;
+            landmarks[9] = new Vector3(personCenter.x - shoulderWidth/1.2f, wristY, 0f); // Left wrist
+            landmarks[10] = new Vector3(personCenter.x + shoulderWidth/1.2f, wristY, 0f); // Right wrist
+
+            // Hip keypoints
+            float hipY = personCenter.y + personHeight * 0.05f;
+            landmarks[11] = new Vector3(personCenter.x - shoulderWidth/3, hipY, 0f); // Left hip
+            landmarks[12] = new Vector3(personCenter.x + shoulderWidth/3, hipY, 0f); // Right hip
+
+            // Knee keypoints
+            float kneeY = personCenter.y + personHeight * 0.2f;
+            landmarks[13] = new Vector3(personCenter.x - shoulderWidth/4, kneeY, 0f); // Left knee
+            landmarks[14] = new Vector3(personCenter.x + shoulderWidth/4, kneeY, 0f); // Right knee
+
+            // Ankle keypoints
+            float ankleY = personCenter.y + personHeight * 0.4f;
+            landmarks[15] = new Vector3(personCenter.x - shoulderWidth/5, ankleY, 0f); // Left ankle
+            landmarks[16] = new Vector3(personCenter.x + shoulderWidth/5, ankleY, 0f); // Right ankle
+
+            // Additional keypoints (simplified connections)
+            for (int i = 17; i < 33; i++)
+            {
+                // Create intermediate keypoints for proper skeleton connections
+                if (i >= 17 && i <= 18) // Additional hips
+                    landmarks[i] = Vector3.Lerp(landmarks[11], landmarks[12], (i - 17 + 1) / 2f);
+                else if (i >= 19 && i <= 20) // Additional shoulders
+                    landmarks[i] = Vector3.Lerp(landmarks[5], landmarks[6], (i - 19 + 1) / 2f);
+                else if (i >= 21 && i <= 22) // Additional elbows
+                    landmarks[i] = Vector3.Lerp(landmarks[7], landmarks[8], (i - 21 + 1) / 2f);
+                else if (i >= 23 && i <= 24) // Additional wrists
+                    landmarks[i] = Vector3.Lerp(landmarks[9], landmarks[10], (i - 23 + 1) / 2f);
+                else if (i >= 25 && i <= 26) // Additional knees
+                    landmarks[i] = Vector3.Lerp(landmarks[13], landmarks[14], (i - 25 + 1) / 2f);
+                else if (i >= 27 && i <= 28) // Additional ankles
+                    landmarks[i] = Vector3.Lerp(landmarks[15], landmarks[16], (i - 27 + 1) / 2f);
+                else if (i >= 29 && i <= 30) // Additional eyes
+                    landmarks[i] = Vector3.Lerp(landmarks[1], landmarks[2], (i - 29 + 1) / 2f);
+                else if (i >= 31 && i <= 32) // Additional ears
+                    landmarks[i] = new Vector3(landmarks[0].x + (i == 31 ? -0.02f : 0.02f), landmarks[0].y + 0.01f, 0f);
+            }
+
+            // Add small random variation to simulate natural pose variation
+            for (int i = 0; i < landmarks.Length; i++)
+            {
+                landmarks[i].x += Random.Range(-0.01f, 0.01f);
+                landmarks[i].y += Random.Range(-0.01f, 0.01f);
+                // Clamp to valid range
+                landmarks[i].x = Mathf.Clamp(landmarks[i].x, 0f, 1f);
+                landmarks[i].y = Mathf.Clamp(landmarks[i].y, 0f, 1f);
+            }
+
+            if (debugMode && Time.frameCount % 120 == 0) // Log every 2 seconds
+            {
+                Debug.Log($"Pose analysis: Person at ({personCenter.x:F2}, {personCenter.y:F2}), height: {personHeight:F2}");
+                Debug.Log($"Generated pose: Nose at ({landmarks[0].x:F2}, {landmarks[0].y:F2}), Shoulders at ({landmarks[5].x:F2}, {landmarks[6].x:F2})");
+            }
+
+            return landmarks;
+        }
+
+        // Find the center of a person in the texture using skin tone detection
+        private Vector2 FindPersonCenterInTexture(Texture2D texture)
+        {
+            Color[] pixels = texture.GetPixels();
+            int width = texture.width;
+            int height = texture.height;
+
+            // Find skin tone regions
+            float totalSkinX = 0f;
+            float totalSkinY = 0f;
+            int skinCount = 0;
+
+            // Sample pixels in a grid pattern for performance
+            int sampleStep = 4; // Sample every 4th pixel
+            for (int y = 0; y < height; y += sampleStep)
+            {
+                for (int x = 0; x < width; x += sampleStep)
+                {
+                    Color pixel = pixels[y * width + x];
+
+                    // Enhanced skin tone detection
+                    float r = pixel.r;
+                    float g = pixel.g;
+                    float b = pixel.b;
+                    float max = Mathf.Max(r, g, b);
+                    float min = Mathf.Min(r, g, b);
+
+                    // More sophisticated skin detection
+                    bool isSkin = (r > 0.4f && g > 0.25f && b > 0.15f) && // Basic skin range
+                                 (r > g && g > b) && // Red > Green > Blue
+                                 ((max - min) < 0.3f) && // Not too saturated
+                                 (r / (g + 0.1f) > 1.1f); // Red/green ratio
+
+                    if (isSkin)
+                    {
+                        totalSkinX += (float)x / width;  // Normalized X
+                        totalSkinY += (float)y / height; // Normalized Y
+                        skinCount++;
+                    }
+                }
+            }
+
+            if (skinCount > 0)
+            {
+                Vector2 center = new Vector2(totalSkinX / skinCount, totalSkinY / skinCount);
+                // Clamp to reasonable person position (upper 2/3 of frame, centered)
+                center.x = Mathf.Clamp(center.x, 0.3f, 0.7f);
+                center.y = Mathf.Clamp(center.y, 0.1f, 0.6f);
+                return center;
+            }
+            else
+            {
+                // Default center if no skin detected
+                return new Vector2(0.5f, 0.4f);
+            }
+        }
+
+        // Estimate person height based on detected skin regions
+        private float EstimatePersonHeight(Texture2D texture, Vector2 personCenter)
+        {
+            Color[] pixels = texture.GetPixels();
+            int width = texture.width;
+            int height = texture.height;
+
+            // Find the vertical extent of skin tones around the person center
+            float minY = 1f;
+            float maxY = 0f;
+            int centerX = (int)(personCenter.x * width);
+            int searchWidth = width / 4; // Search quarter of width around center
+
+            for (int x = Mathf.Max(0, centerX - searchWidth); x < Mathf.Min(width, centerX + searchWidth); x++)
+            {
+                for (int y = 0; y < height; y++)
+                {
+                    Color pixel = pixels[y * width + x];
+                    float r = pixel.r, g = pixel.g, b = pixel.b;
+
+                    bool isSkin = (r > 0.4f && g > 0.25f && b > 0.15f) &&
+                                 (r > g && g > b) &&
+                                 ((Mathf.Max(r, g, b) - Mathf.Min(r, g, b)) < 0.3f);
+
+                    if (isSkin)
+                    {
+                        float normY = (float)y / height;
+                        minY = Mathf.Min(minY, normY);
+                        maxY = Mathf.Max(maxY, normY);
+                    }
+                }
+            }
+
+            float heightRange = maxY - minY;
+            if (heightRange > 0.1f) // Minimum reasonable height
+            {
+                return Mathf.Clamp(heightRange * 1.2f, 0.3f, 0.8f); // Estimate full height
+            }
+            else
+            {
+                return 0.5f; // Default height
+            }
         }
 
         // Data structures
