@@ -27,7 +27,7 @@ namespace ScouterXR.UI
         private Vector3 haloVelocity = Vector3.zero;
 
 
-        void Update()
+        public void Update()
         {
             // 1. SMOOTH HALO POSITION
             if (targetLockOnUI != null)
@@ -55,7 +55,10 @@ namespace ScouterXR.UI
                 var tmpText = powerLevelText.GetComponentInChildren<TMPro.TextMeshProUGUI>();
                 if (tmpText != null)
                 {
-                    tmpText.text = $"Power Level: {currentPowerLevel:F0}";
+                    // Make text more horizontal and informative
+                    string powerBar = new string('█', Mathf.Clamp((int)(currentPowerLevel / 1000f * 20), 1, 20));
+                    tmpText.text = $"POWER LEVEL: {currentPowerLevel:F0}\n[{powerBar}]";
+                    tmpText.alignment = TMPro.TextAlignmentOptions.Left;
                 }
                 else
                 {
@@ -63,7 +66,9 @@ namespace ScouterXR.UI
                     var uiText = powerLevelText.GetComponentInChildren<UnityEngine.UI.Text>();
                     if (uiText != null)
                     {
-                        uiText.text = $"Power Level: {currentPowerLevel:F0}";
+                        string powerBar = new string('█', Mathf.Clamp((int)(currentPowerLevel / 1000f * 20), 1, 20));
+                        uiText.text = $"POWER LEVEL: {currentPowerLevel:F0}\n[{powerBar}]";
+                        uiText.alignment = TextAnchor.MiddleLeft;
                     }
                 }
             }
@@ -171,7 +176,7 @@ namespace ScouterXR.UI
             // Auto-assign audio controller if not set
             if (audioController == null)
             {
-                audioController = FindObjectOfType<SpatialAudioController>();
+                audioController = FindFirstObjectByType<SpatialAudioController>();
             }
         }
     }

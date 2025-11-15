@@ -21,6 +21,8 @@ namespace ScouterXR.AI
         [Header("References")]
         public MediaPipeModelManager modelManager;
         public TensorFlowLiteInference inferenceEngine;
+        public MediaPipePoseEstimator poseEstimator;
+        public bool debugMode = false;
 
         // Hand detection data structures
         [System.Serializable]
@@ -45,11 +47,12 @@ namespace ScouterXR.AI
         private WebCamTexture webcamTexture;
         private Texture2D inputTexture;
         private float lastInferenceTime = 0f;
+        private bool useSharedTexture = false; // Whether we're using a shared webcam texture
         private bool isInitialized = false;
 
         void Start()
         {
-            SystemLogger.LogInfo("HandPointingRecognizer", "Real MediaPipe hand tracking initialization started");
+            SystemLogger.LogInfo("HandPointingRecognizer", $"STARTING: HandTracking={enableHandTracking}, DebugMode={debugMode}, Width={targetWidth}, Height={targetHeight}");
 
             // Initialize camera and models
             StartCoroutine(InitializeHandTracking());
@@ -78,8 +81,15 @@ namespace ScouterXR.AI
                 inferenceEngine.useFullHandModel = useFullHandModel;
             }
 
-            // Initialize webcam
-            yield return StartCoroutine(InitializeWebcam());
+            // Initialize webcam (skip if using shared texture)
+            if (!useSharedTexture)
+            {
+                yield return StartCoroutine(InitializeWebcam());
+            }
+            else
+            {
+                SystemLogger.LogInfo("HandPointingRecognizer", "Using shared webcam texture - skipping webcam initialization");
+            }
 
             // Initialize inference pipeline
             InitializeInference();
@@ -125,6 +135,12 @@ namespace ScouterXR.AI
 
         void Update()
         {
+            // Debug: Log that Update is being called
+            if (Time.frameCount % 60 == 0) // Log every second
+            {
+                Debug.Log($"HandPointingRecognizer: Update() called on {gameObject.name}, enabled={enabled}, debugMode={debugMode}, initialized={isInitialized}, enableHandTracking={enableHandTracking}");
+            }
+
             if (!enableHandTracking || !isInitialized) return;
 
             // Run inference at specified interval
@@ -137,31 +153,61 @@ namespace ScouterXR.AI
             // Update gesture recognition
             DetectPointingGestures();
             UpdateGestureTimers();
+
+            // Debug logging for hand processing
+            if (debugMode)
+            {
+                // Log more frequently for debugging
+                if (Time.frameCount % 30 == 0) // Log every half second at 60fps
+                {
+                    string source = useSharedTexture ? "SHARED_WEBCAM" : "OWN_WEBCAM";
+                    bool handDetected = IsHandDetected();
+                    bool pointing = IsPointingGestureActive();
+                    Debug.Log($"HandPointingRecognizer: HAND UPDATE: Source={source}, Detected={handDetected}, Pointing={pointing}, Initialized={isInitialized}");
+                    SystemLogger.LogInfo("HandPointingRecognizer", $"HAND UPDATE: Source={source}, Detected={handDetected}, Pointing={pointing}, Initialized={isInitialized}");
+                }
+            }
         }
 
         private void RunHandInference()
         {
-            if (webcamTexture == null || !webcamTexture.isPlaying) return;
+            Debug.Log($"RunHandInference: Starting inference, webcamTexture={webcamTexture != null}, playing={webcamTexture?.isPlaying}, inferenceEngine={inferenceEngine != null}");
+
+            if (webcamTexture == null || !webcamTexture.isPlaying)
+            {
+                if (debugMode && Time.frameCount % 60 == 0) // Log every second
+                {
+                    Debug.LogWarning($"RunHandInference: Cannot run inference: Webcam null or not playing");
+                    SystemLogger.LogWarning("HandPointingRecognizer", $"Cannot run inference: Webcam null or not playing");
+                }
+                return;
+            }
 
             try
             {
                 // Capture current frame
+                Debug.Log("RunHandInference: Capturing camera frame");
                 CaptureCameraFrame();
 
                 // Preprocess for MediaPipe (rotate, resize, normalize)
+                Debug.Log("RunHandInference: Preprocessing frame");
                 Texture2D processedFrame = PreprocessFrame(inputTexture);
 
                 // Run MediaPipe hand detection
+                Debug.Log("RunHandInference: Running MediaPipe hand detection");
                 var handResults = RunMediaPipeHandDetection(processedFrame);
 
                 // Process results
+                Debug.Log($"RunHandInference: Processing hand results, type={handResults?.GetType()}");
                 ProcessHandResults(handResults);
 
                 // Cleanup
                 Destroy(processedFrame);
+                Debug.Log("RunHandInference: Inference completed successfully");
             }
             catch (System.Exception e)
             {
+                Debug.LogError($"RunHandInference: Hand inference failed: {e.Message}");
                 SystemLogger.LogError("HandPointingRecognizer", $"Hand inference failed: {e.Message}");
             }
         }
@@ -220,10 +266,13 @@ namespace ScouterXR.AI
 
         private object CreateInferenceResult(TensorFlowLiteInference.InferenceResult inferenceResult)
         {
+            Debug.Log($"CreateInferenceResult: inferenceResult={inferenceResult != null}, success={inferenceResult?.success}, landmarks={inferenceResult?.landmarks?.Length}");
+
             var results = new System.Collections.Generic.List<HandDetectionResult>();
 
             if (inferenceResult != null && inferenceResult.success && inferenceResult.landmarks.Length > 0)
             {
+                Debug.Log($"CreateInferenceResult: Creating hand result with {inferenceResult.landmarks.Length} landmarks, confidence={inferenceResult.confidence}");
                 var result = new HandDetectionResult
                 {
                     isRightHand = true, // Assume right hand for now
@@ -232,18 +281,25 @@ namespace ScouterXR.AI
                 };
                 results.Add(result);
             }
+            else
+            {
+                Debug.LogWarning("CreateInferenceResult: No valid inference result, returning empty results");
+            }
 
             return results;
         }
 
         private object CreateFallbackResults()
         {
+            Debug.Log("CreateFallbackResults: Using fallback mock results");
+
             // Fallback mock results when inference fails
             var results = new System.Collections.Generic.List<HandDetectionResult>();
 
             // Simulate detecting 0-1 hands as fallback
             if (Random.value > 0.7f) // 30% chance of detecting a hand
             {
+                Debug.Log("CreateFallbackResults: Generating mock hand detection");
                 var result = new HandDetectionResult
                 {
                     isRightHand = true,
@@ -251,6 +307,10 @@ namespace ScouterXR.AI
                     landmarks = GenerateRealisticHandLandmarks(true)
                 };
                 results.Add(result);
+            }
+            else
+            {
+                Debug.Log("CreateFallbackResults: No mock hand detection this time");
             }
 
             return results;
@@ -351,7 +411,30 @@ namespace ScouterXR.AI
                 // Convert landmarks to world space
                 ConvertLandmarksToWorldSpace(targetHand);
 
-                SystemLogger.LogInfo("HandPointingRecognizer", $"Hand detected - {(result.isRightHand ? "Right" : "Left")}, Confidence: {result.confidence:F2}");
+                // Detailed hand detection logging
+                if (debugMode)
+                {
+                    SystemLogger.LogInfo("HandPointingRecognizer", $"HAND DETECTED: {(result.isRightHand ? "Right" : "Left")} hand, Confidence: {result.confidence:F2}");
+
+                    if (result.landmarks != null && result.landmarks.Length > 0)
+                    {
+                        SystemLogger.LogInfo("HandPointingRecognizer", $"Landmarks: {result.landmarks.Length} points detected");
+
+                        // Log key landmark positions for validation
+                        if (result.landmarks.Length >= 5)
+                        {
+                            SystemLogger.LogInfo("HandPointingRecognizer", $"Key points: Wrist={result.landmarks[0]}, Thumb={result.landmarks[1]}, Index={result.landmarks[2]}, Middle={result.landmarks[3]}, Pinky={result.landmarks[4]}");
+                        }
+                    }
+                    else
+                    {
+                        SystemLogger.LogWarning("HandPointingRecognizer", "Hand detected but no landmarks found!");
+                    }
+                }
+                else
+                {
+                    SystemLogger.LogInfo("HandPointingRecognizer", $"Hand detected - {(result.isRightHand ? "Right" : "Left")}, Confidence: {result.confidence:F2}");
+                }
             }
         }
 
@@ -512,7 +595,7 @@ namespace ScouterXR.AI
             SystemLogger.LogInfo("HandPointingRecognizer", $"REAL pointing gesture activated - Confidence: {hand.pointingConfidence:F2}");
 
             // Notify XR Manager
-            var xrManager = FindObjectOfType<XRScouterManager>();
+            var xrManager = FindFirstObjectByType<XRScouterManager>();
             if (xrManager != null)
             {
                 xrManager.OnPointingGestureDetected(hand.pointingDirection, hand.landmarks[8]);
@@ -523,7 +606,7 @@ namespace ScouterXR.AI
         {
             SystemLogger.LogInfo("HandPointingRecognizer", "Pointing gesture deactivated");
 
-            var xrManager = FindObjectOfType<XRScouterManager>();
+            var xrManager = FindFirstObjectByType<XRScouterManager>();
             if (xrManager != null)
             {
                 xrManager.OnPointingGestureLost();
@@ -554,6 +637,24 @@ namespace ScouterXR.AI
         public bool IsHandDetected()
         {
             return leftHand.isDetected || rightHand.isDetected;
+        }
+
+        // Public method to set shared webcam texture (for test scene integration)
+        public void SetWebcamTexture(WebCamTexture texture)
+        {
+            Debug.Log($"SetWebcamTexture (Hand): Received webcam texture: {texture?.deviceName}, playing={texture?.isPlaying}");
+            if (texture != null)
+            {
+                // Use the shared webcam texture instead of creating our own
+                webcamTexture = texture;
+                useSharedTexture = true;
+                Debug.Log($"SetWebcamTexture (Hand): Set useSharedTexture=true, webcamTexture assigned");
+                SystemLogger.LogInfo("HandPointingRecognizer", $"Using shared webcam texture: {texture.deviceName}");
+            }
+            else
+            {
+                Debug.LogWarning("SetWebcamTexture (Hand): Received null texture!");
+            }
         }
 
         public int GetDetectedHandCount()

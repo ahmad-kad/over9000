@@ -51,22 +51,22 @@ namespace ScouterXR.Core
         {
             // Auto-find components if not assigned
             if (poseEstimator == null)
-                poseEstimator = FindObjectOfType<MediaPipePoseEstimator>();
+                poseEstimator = FindFirstObjectByType<MediaPipePoseEstimator>();
 
             if (handRecognizer == null)
-                handRecognizer = FindObjectOfType<HandPointingRecognizer>();
+                handRecognizer = FindFirstObjectByType<HandPointingRecognizer>();
 
             if (xrManager == null)
-                xrManager = FindObjectOfType<XRScouterManager>();
+                xrManager = FindFirstObjectByType<XRScouterManager>();
 
             if (spatialUI == null)
-                spatialUI = FindObjectOfType<XRSpatialUIManager>();
+                spatialUI = FindFirstObjectByType<XRSpatialUIManager>();
 
             if (screenUI == null)
-                screenUI = FindObjectOfType<ScouterUI>();
+                screenUI = FindFirstObjectByType<ScouterUI>();
 
             if (audioController == null)
-                audioController = FindObjectOfType<SpatialAudioController>();
+                audioController = FindFirstObjectByType<SpatialAudioController>();
         }
 
         private void ValidatePipelineIntegrity()

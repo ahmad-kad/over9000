@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
+using Unity.XR.CoreUtils;
 using ScouterXR.AI;
 using ScouterXR.UI;
 using ScouterXR.AR;
@@ -18,7 +19,7 @@ namespace ScouterXR.Core
 
         [Header("AR Foundation")]
         public ARSession arSession;
-        public ARSessionOrigin sessionOrigin;
+        public XROrigin xrOrigin;
 
         [Header("Debug")]
         public bool showDebugInfo = false;

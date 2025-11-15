@@ -14,6 +14,7 @@ namespace ScouterXR.Core
     public AudioClip battleMusicClip;          // dragonball_battle.mp3
     public AudioClip glassShatterClip;         // glass_shatter.mp3
     public AudioClip defeatScreamClip;         // NOOOOOO - AUDIO FROM JAYUZUMI.COM.mp3
+    public AudioClip scouterHumClip;           // Scouter humming sound
 
     [Header("Scanning Audio")]
     public AudioClip[] scanningBeeps;          // Array for ramp-up beeping effect
@@ -151,6 +152,18 @@ namespace ScouterXR.Core
             if (defeatScreamClip != null)
             {
                 audioSource.PlayOneShot(defeatScreamClip);
+            }
+        }
+
+        public void PlayScouterHum()
+        {
+            if (scouterHumClip != null)
+            {
+                audioSource.PlayOneShot(scouterHumClip);
+            }
+            else
+            {
+                SystemLogger.LogWarning("SpatialAudioController", "Scouter hum clip not assigned");
             }
         }
 

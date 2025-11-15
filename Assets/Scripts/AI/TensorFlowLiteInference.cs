@@ -29,40 +29,41 @@ namespace ScouterXR.AI
         {
             var result = new InferenceResult();
 
+            // Validate inputs
+            if (inputTexture == null)
+            {
+                result.errorMessage = "Input texture is null";
+                onComplete(result);
+                yield break;
+            }
+
+            if (modelManager == null)
+            {
+                result.errorMessage = "Model manager not available";
+                onComplete(result);
+                yield break;
+            }
+
+            // Get appropriate model data
+            byte[] modelData = useFullHandModel ?
+                modelManager.GetHandLandmarkModelData() :
+                modelManager.GetHandLandmarkModelData(); // Same for now
+
+            if (modelData == null || modelData.Length == 0)
+            {
+                result.errorMessage = "Hand landmark model not loaded";
+                onComplete(result);
+                yield break;
+            }
+
+            // Perform inference (move try-catch outside yield)
+            SystemLogger.LogInfo("TensorFlowLiteInference", $"Running hand inference with {(useFullHandModel ? "full" : "lite")} model");
+
+            // Simulate inference delay (in real implementation, this would be actual TFLite inference)
+            yield return new WaitForSeconds(0.05f); // ~20 FPS inference
+
             try
             {
-                // Validate inputs
-                if (inputTexture == null)
-                {
-                    result.errorMessage = "Input texture is null";
-                    onComplete(result);
-                    yield break;
-                }
-
-                if (modelManager == null)
-                {
-                    result.errorMessage = "Model manager not available";
-                    onComplete(result);
-                    yield break;
-                }
-
-                // Get appropriate model data
-                byte[] modelData = useFullHandModel ?
-                    modelManager.GetHandLandmarkModelData() :
-                    modelManager.GetHandLandmarkModelData(); // Same for now
-
-                if (modelData == null || modelData.Length == 0)
-                {
-                    result.errorMessage = "Hand landmark model not loaded";
-                    onComplete(result);
-                    yield break;
-                }
-
-                SystemLogger.LogInfo("TensorFlowLiteInference", $"Running hand inference with {(useFullHandModel ? "full" : "lite")} model");
-
-                // Simulate inference delay (in real implementation, this would be actual TFLite inference)
-                yield return new WaitForSeconds(0.05f); // ~20 FPS inference
-
                 // Generate realistic results based on input texture
                 result = GenerateInferenceResult(inputTexture);
 

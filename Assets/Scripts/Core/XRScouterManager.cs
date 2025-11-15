@@ -43,7 +43,7 @@ namespace ScouterXR.Core
             // Auto-find components if not assigned
             if (raycastManager == null)
             {
-                raycastManager = FindObjectOfType<ARRaycastManager>();
+                raycastManager = FindFirstObjectByType<ARRaycastManager>();
             }
 
             if (arCamera == null)
@@ -53,12 +53,12 @@ namespace ScouterXR.Core
 
             if (handRecognizer == null)
             {
-                handRecognizer = FindObjectOfType<HandPointingRecognizer>();
+                handRecognizer = FindFirstObjectByType<HandPointingRecognizer>();
             }
 
             if (spatialUIManager == null)
             {
-                spatialUIManager = FindObjectOfType<ScouterXR.UI.XRSpatialUIManager>();
+                spatialUIManager = FindFirstObjectByType<ScouterXR.UI.XRSpatialUIManager>();
             }
         }
 
@@ -122,7 +122,7 @@ namespace ScouterXR.Core
             Vector3 rayDirection = pointingDirection;
 
             var hits = new System.Collections.Generic.List<ARRaycastHit>();
-            if (raycastManager.Raycast(rayOrigin, rayDirection, hits, raycastTrackableTypes, maxScanDistance))
+            if (raycastManager.Raycast(new Ray(rayOrigin, rayDirection), hits, raycastTrackableTypes))
             {
                 if (hits.Count > 0)
                 {
@@ -189,7 +189,7 @@ namespace ScouterXR.Core
             }
 
             // Notify other systems
-            var poseEstimator = FindObjectOfType<MediaPipePoseEstimator>();
+            var poseEstimator = FindFirstObjectByType<MediaPipePoseEstimator>();
             if (poseEstimator != null)
             {
                 poseEstimator.OnScanningStarted(scanTargetPosition);
@@ -307,7 +307,7 @@ namespace ScouterXR.Core
             SystemLogger.LogInfo("XRScouterManager", "TRIGGERING OVER 9000 EFFECT!");
 
             // Find and trigger overload effects
-            var haloController = FindObjectOfType<HaloColorController>();
+            var haloController = FindFirstObjectByType<HaloColorController>();
             if (haloController != null)
             {
                 // Rapid color cycling for overload effect

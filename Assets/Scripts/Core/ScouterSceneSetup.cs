@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
+using Unity.XR.CoreUtils;
 using ScouterXR.AI;
 using ScouterXR.UI;
 using ScouterXR.AR;
@@ -25,45 +26,45 @@ namespace ScouterXR.Core
             Debug.Log("Setting up DBZ Scouter XR scene...");
 
             // Create AR Session if not exists
-            if (FindObjectOfType<ARSession>() == null)
+            if (FindFirstObjectByType<ARSession>() == null)
             {
                 GameObject arSessionObj = new GameObject("AR Session");
                 arSessionObj.AddComponent<ARSession>();
                 Debug.Log("Created AR Session");
             }
 
-            // Create AR Session Origin if not exists
-            if (FindObjectOfType<ARSessionOrigin>() == null)
+            // Create XR Origin if not exists
+            if (FindFirstObjectByType<XROrigin>() == null)
             {
-                GameObject sessionOriginObj = new GameObject("AR Session Origin");
-                ARSessionOrigin sessionOrigin = sessionOriginObj.AddComponent<ARSessionOrigin>();
+                GameObject xrOriginObj = new GameObject("XR Origin");
+                XROrigin xrOrigin = xrOriginObj.AddComponent<XROrigin>();
 
                 // Add AR Camera
                 GameObject cameraObj = new GameObject("AR Camera");
-                cameraObj.transform.SetParent(sessionOriginObj.transform);
+                cameraObj.transform.SetParent(xrOriginObj.transform);
                 Camera arCamera = cameraObj.AddComponent<Camera>();
                 arCamera.clearFlags = CameraClearFlags.SolidColor;
                 arCamera.backgroundColor = Color.black;
                 arCamera.tag = "MainCamera";
 
-                sessionOrigin.camera = arCamera;
+                xrOrigin.Camera = arCamera;
                 Debug.Log("Created AR Session Origin with Camera");
             }
 
             // Create Scouter Manager if not exists
-            if (FindObjectOfType<ScouterManager>() == null)
+            if (FindFirstObjectByType<ScouterManager>() == null)
             {
                 GameObject managerObj = new GameObject("Scouter Manager");
                 ScouterManager manager = managerObj.AddComponent<ScouterManager>();
 
                 // Auto-assign references if possible
-                manager.arSession = FindObjectOfType<ARSession>();
-                manager.sessionOrigin = FindObjectOfType<ARSessionOrigin>();
+                manager.arSession = FindFirstObjectByType<ARSession>();
+                manager.xrOrigin = FindFirstObjectByType<XROrigin>();
                 Debug.Log("Created Scouter Manager");
             }
 
             // Create MediaPipe Model Manager if not exists
-            if (FindObjectOfType<ScouterXR.AI.MediaPipeModelManager>() == null)
+            if (FindFirstObjectByType<ScouterXR.AI.MediaPipeModelManager>() == null)
             {
                 GameObject modelObj = new GameObject("MediaPipe Model Manager");
                 var modelManager = modelObj.AddComponent<ScouterXR.AI.MediaPipeModelManager>();
@@ -74,7 +75,7 @@ namespace ScouterXR.Core
             }
 
             // Create AI System if not exists
-            var poseEstimator = FindObjectOfType<ScouterXR.AI.MediaPipePoseEstimator>();
+            var poseEstimator = FindFirstObjectByType<ScouterXR.AI.MediaPipePoseEstimator>();
             if (poseEstimator == null)
             {
                 GameObject aiObj = new GameObject("Pose Estimator");
@@ -87,7 +88,7 @@ namespace ScouterXR.Core
                     poseEstimator.arCamera = mainCam;
                 }
 
-                var modelManager = FindObjectOfType<ScouterXR.AI.MediaPipeModelManager>();
+                var modelManager = FindFirstObjectByType<ScouterXR.AI.MediaPipeModelManager>();
                 if (modelManager != null)
                 {
                     poseEstimator.modelManager = modelManager;
@@ -100,13 +101,13 @@ namespace ScouterXR.Core
             }
 
             // Create UI Canvas if not exists
-            if (FindObjectOfType<Canvas>() == null)
+            if (FindFirstObjectByType<Canvas>() == null)
             {
                 CreateUICanvas();
             }
 
             // Create Halo Color Controller if not exists
-            if (FindObjectOfType<ScouterXR.UI.HaloColorController>() == null)
+            if (FindFirstObjectByType<ScouterXR.UI.HaloColorController>() == null)
             {
                 GameObject haloObj = new GameObject("Halo Color Controller");
                 ScouterXR.UI.HaloColorController haloController = haloObj.AddComponent<ScouterXR.UI.HaloColorController>();
@@ -122,7 +123,7 @@ namespace ScouterXR.Core
             }
 
             // Create AR Feature Manager if not exists
-            if (FindObjectOfType<ScouterXR.AR.ArFeatureManager>() == null)
+            if (FindFirstObjectByType<ScouterXR.AR.ArFeatureManager>() == null)
             {
                 GameObject arObj = new GameObject("AR Feature Manager");
                 ScouterXR.AR.ArFeatureManager arManager = arObj.AddComponent<ScouterXR.AR.ArFeatureManager>();
@@ -139,7 +140,7 @@ namespace ScouterXR.Core
                 }
 
                 // Assign halo material from the controller we just created
-                var haloController = FindObjectOfType<ScouterXR.UI.HaloColorController>();
+                var haloController = FindFirstObjectByType<ScouterXR.UI.HaloColorController>();
                 if (haloController != null)
                 {
                     arManager.haloMaterial = haloController.haloMaterial;
@@ -149,27 +150,27 @@ namespace ScouterXR.Core
             }
 
             // Create XR Spatial UI Manager if not exists
-            if (FindObjectOfType<ScouterXR.UI.XRSpatialUIManager>() == null)
+            if (FindFirstObjectByType<ScouterXR.UI.XRSpatialUIManager>() == null)
             {
                 GameObject spatialUIObj = new GameObject("XR Spatial UI Manager");
                 ScouterXR.UI.XRSpatialUIManager spatialUIManager = spatialUIObj.AddComponent<ScouterXR.UI.XRSpatialUIManager>();
 
                 // Auto-assign AR Foundation components
-                spatialUIManager.anchorManager = FindObjectOfType<UnityEngine.XR.ARFoundation.ARAnchorManager>();
-                spatialUIManager.raycastManager = FindObjectOfType<UnityEngine.XR.ARFoundation.ARRaycastManager>();
+                spatialUIManager.anchorManager = FindFirstObjectByType<UnityEngine.XR.ARFoundation.ARAnchorManager>();
+                spatialUIManager.raycastManager = FindFirstObjectByType<UnityEngine.XR.ARFoundation.ARRaycastManager>();
                 spatialUIManager.arCamera = Camera.main;
 
                 // Auto-assign existing UI components
-                spatialUIManager.screenUI = FindObjectOfType<ScouterXR.UI.ScouterUI>();
-                spatialUIManager.haloController = FindObjectOfType<ScouterXR.UI.HaloColorController>();
-                spatialUIManager.scouterManager = FindObjectOfType<ScouterXR.Core.XRScouterManager>();
+                spatialUIManager.screenUI = FindFirstObjectByType<ScouterXR.UI.ScouterUI>();
+                spatialUIManager.haloController = FindFirstObjectByType<ScouterXR.UI.HaloColorController>();
+                spatialUIManager.scouterManager = FindFirstObjectByType<ScouterXR.Core.XRScouterManager>();
                 spatialUIManager.poseEstimator = poseEstimator;
 
                 Debug.Log("Created XR Spatial UI Manager with spatial anchoring");
             }
 
             // Create Monitoring Systems
-            if (FindObjectOfType<PerformanceMonitor>() == null)
+            if (FindFirstObjectByType<PerformanceMonitor>() == null)
             {
                 GameObject monitorObj = new GameObject("Performance Monitor");
                 PerformanceMonitor monitor = monitorObj.AddComponent<PerformanceMonitor>();
@@ -185,7 +186,7 @@ namespace ScouterXR.Core
             }
 
             // Create System Logger
-            if (FindObjectOfType<SystemLogger>() == null)
+            if (FindFirstObjectByType<SystemLogger>() == null)
             {
                 GameObject loggerObj = new GameObject("System Logger");
                 SystemLogger logger = loggerObj.AddComponent<SystemLogger>();
@@ -200,18 +201,18 @@ namespace ScouterXR.Core
             }
 
             // Create Fallback Manager
-            if (FindObjectOfType<FallbackManager>() == null)
+            if (FindFirstObjectByType<FallbackManager>() == null)
             {
                 GameObject fallbackObj = new GameObject("Fallback Manager");
                 FallbackManager fallback = fallbackObj.AddComponent<FallbackManager>();
 
                 // Auto-assign references
                 fallback.poseEstimator = poseEstimator;
-                fallback.scouterUI = FindObjectOfType<ScouterUI>();
-                fallback.haloController = FindObjectOfType<HaloColorController>();
-                fallback.arFeatureManager = FindObjectOfType<ArFeatureManager>();
-                fallback.spatialAudio = FindObjectOfType<SpatialAudioController>();
-                fallback.performanceMonitor = FindObjectOfType<PerformanceMonitor>();
+                fallback.scouterUI = FindFirstObjectByType<ScouterUI>();
+                fallback.haloController = FindFirstObjectByType<HaloColorController>();
+                fallback.arFeatureManager = FindFirstObjectByType<ArFeatureManager>();
+                fallback.spatialAudio = FindFirstObjectByType<SpatialAudioController>();
+                fallback.performanceMonitor = FindFirstObjectByType<PerformanceMonitor>();
 
                 fallback.enableAutomaticFallbacks = true;
                 fallback.fallbackCheckInterval = 2f;
@@ -220,7 +221,7 @@ namespace ScouterXR.Core
             }
 
             // Create Spatial Audio Controller if not exists
-            if (FindObjectOfType<ScouterXR.Core.SpatialAudioController>() == null)
+            if (FindFirstObjectByType<ScouterXR.Core.SpatialAudioController>() == null)
             {
                 GameObject audioObj = new GameObject("Spatial Audio Controller");
                 var audioController = audioObj.AddComponent<ScouterXR.Core.SpatialAudioController>();
@@ -236,7 +237,7 @@ namespace ScouterXR.Core
             }
 
             // Create Test Runner for automated testing
-            if (FindObjectOfType<ScouterXR.Tests.Utilities.TestRunner>() == null)
+            if (FindFirstObjectByType<ScouterXR.Tests.Utilities.TestRunner>() == null)
             {
                 GameObject testObj = new GameObject("Test Runner");
                 var testRunner = testObj.AddComponent<ScouterXR.Tests.Utilities.TestRunner>();
@@ -251,14 +252,14 @@ namespace ScouterXR.Core
             }
 
             // Create Hand Pointing Recognizer if not exists
-            if (FindObjectOfType<ScouterXR.AI.HandPointingRecognizer>() == null)
+            if (FindFirstObjectByType<ScouterXR.AI.HandPointingRecognizer>() == null)
             {
                 GameObject handObj = new GameObject("Hand Pointing Recognizer");
                 var handRecognizer = handObj.AddComponent<ScouterXR.AI.HandPointingRecognizer>();
 
                 // Auto-assign references
                 handRecognizer.arCamera = Camera.main;
-                handRecognizer.poseEstimator = FindObjectOfType<ScouterXR.AI.MediaPipePoseEstimator>();
+                handRecognizer.poseEstimator = FindFirstObjectByType<ScouterXR.AI.MediaPipePoseEstimator>();
 
                 handRecognizer.enableHandTracking = true;
                 handRecognizer.pointingThreshold = 0.7f;
@@ -268,7 +269,7 @@ namespace ScouterXR.Core
             }
 
             // Create TensorFlow Lite Inference Engine if not exists
-            if (FindObjectOfType<ScouterXR.AI.TensorFlowLiteInference>() == null)
+            if (FindFirstObjectByType<ScouterXR.AI.TensorFlowLiteInference>() == null)
             {
                 // This is created automatically by HandPointingRecognizer
                 // But we can create a global one if needed
@@ -276,17 +277,17 @@ namespace ScouterXR.Core
             }
 
             // Create XR Scouter Manager if not exists
-            if (FindObjectOfType<ScouterXR.Core.XRScouterManager>() == null)
+            if (FindFirstObjectByType<ScouterXR.Core.XRScouterManager>() == null)
             {
                 GameObject xrObj = new GameObject("XR Scouter Manager");
                 var xrManager = xrObj.AddComponent<ScouterXR.Core.XRScouterManager>();
 
                 // Auto-assign references
-                xrManager.raycastManager = FindObjectOfType<UnityEngine.XR.ARFoundation.ARRaycastManager>();
+                xrManager.raycastManager = FindFirstObjectByType<UnityEngine.XR.ARFoundation.ARRaycastManager>();
                 xrManager.arCamera = Camera.main;
-                xrManager.handRecognizer = FindObjectOfType<ScouterXR.AI.HandPointingRecognizer>();
-                xrManager.scouterUI = FindObjectOfType<ScouterXR.UI.ScouterUI>();
-                xrManager.audioController = FindObjectOfType<ScouterXR.Core.SpatialAudioController>();
+                xrManager.handRecognizer = FindFirstObjectByType<ScouterXR.AI.HandPointingRecognizer>();
+                xrManager.scouterUI = FindFirstObjectByType<ScouterXR.UI.ScouterUI>();
+                xrManager.audioController = FindFirstObjectByType<ScouterXR.Core.SpatialAudioController>();
 
                 xrManager.scanDuration = 3f;
                 xrManager.maxScanDistance = 10f;

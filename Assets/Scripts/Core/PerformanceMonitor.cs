@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace ScouterXR.Core
 {
@@ -23,9 +22,6 @@ namespace ScouterXR.Core
 
         private float deltaTime = 0f;
         private float lastUpdateTime = 0f;
-
-        // Memory tracking
-        private long lastMemoryUsage = 0;
 
         // System info
         private string deviceInfo = "";

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using Unity.XR.CoreUtils;
 using System.Collections.Generic;
 using ScouterXR.Core;
 using ScouterXR.AI;
@@ -83,22 +84,39 @@ namespace ScouterXR.UI
         {
             // Auto-find AR components if not assigned
             if (anchorManager == null)
-                anchorManager = FindObjectOfType<ARAnchorManager>();
+                anchorManager = FindFirstObjectByType<ARAnchorManager>();
 
             if (raycastManager == null)
-                raycastManager = FindObjectOfType<ARRaycastManager>();
+                raycastManager = FindFirstObjectByType<ARRaycastManager>();
 
             if (arCamera == null)
                 arCamera = Camera.main;
 
-            // Create AR components if they don't exist
+            // Create AR components if they don't exist and AR subsystems are available
             if (anchorManager == null)
             {
-                var sessionOrigin = FindObjectOfType<ARSessionOrigin>();
+                var sessionOrigin = FindFirstObjectByType<XROrigin>();
                 if (sessionOrigin != null)
                 {
-                    anchorManager = sessionOrigin.gameObject.AddComponent<ARAnchorManager>();
-                    SystemLogger.LogInfo("XRSpatialUIManager", "Created ARAnchorManager");
+                    // Check if AR subsystems are available before creating ARAnchorManager
+                    var xrGeneralSettings = UnityEngine.XR.Management.XRGeneralSettings.Instance;
+                    if (xrGeneralSettings != null && xrGeneralSettings.Manager != null &&
+                        xrGeneralSettings.Manager.activeLoaders.Count > 0)
+                    {
+                        try
+                        {
+                            anchorManager = sessionOrigin.gameObject.AddComponent<ARAnchorManager>();
+                            SystemLogger.LogInfo("XRSpatialUIManager", "Created ARAnchorManager");
+                        }
+                        catch (System.Exception e)
+                        {
+                            SystemLogger.LogWarning("XRSpatialUIManager", $"Failed to create ARAnchorManager: {e.Message}. AR features will be limited.");
+                        }
+                    }
+                    else
+                    {
+                        SystemLogger.LogWarning("XRSpatialUIManager", "No XR providers available. AR anchoring disabled. Enable XR providers in Project Settings > XR Plug-in Management for full AR functionality.");
+                    }
                 }
             }
         }
@@ -174,13 +192,15 @@ namespace ScouterXR.UI
                 return null;
             }
 
-            Pose anchorPose = new Pose(position, Quaternion.identity);
-            ARAnchor anchor = anchorManager.AddAnchor(anchorPose);
+            // Create a GameObject with ARAnchor component
+            GameObject anchorObject = new GameObject($"TargetAnchor_{targetId}");
+            anchorObject.transform.position = position;
+            anchorObject.transform.rotation = Quaternion.identity;
 
+            ARAnchor anchor = anchorObject.AddComponent<ARAnchor>();
             if (anchor != null)
             {
-                anchor.name = $"TargetAnchor_{targetId}";
-                SystemLogger.LogInfo("XRSpatialUIManager", $"Created AR anchor for target {targetId}");
+                SystemLogger.LogInfo("XRSpatialUIManager", $"Created AR anchor for target {targetId} at position {position}");
             }
 
             return anchor;
@@ -634,7 +654,7 @@ namespace ScouterXR.UI
         private Vector3 GetFingerPointingPosition()
         {
             // Get finger pointing position from HandPointingRecognizer
-            var handRecognizer = FindObjectOfType<ScouterXR.AI.HandPointingRecognizer>();
+            var handRecognizer = FindFirstObjectByType<ScouterXR.AI.HandPointingRecognizer>();
             if (handRecognizer != null && handRecognizer.IsPointingGestureActive())
             {
                 Vector3 tipPosition = handRecognizer.GetPointingTipPosition();

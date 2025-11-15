@@ -90,8 +90,7 @@ namespace ScouterXR.Core
             var currentMode = arFeatureManager.GetCurrentOcclusionMode();
 
             // If we're on a low-quality depth mode, suggest optimizations
-            if (currentMode == ArFeatureManager.OcclusionMode.EnvironmentDepth ||
-                currentMode == ArFeatureManager.OcclusionMode.AiDepthEstimation)
+            if (currentMode == ArFeatureManager.OcclusionMode.AiDepthEstimation)
             {
                 SystemLogger.LogInfo("FallbackManager", $"Using depth fallback mode: {currentMode}");
 
@@ -226,7 +225,7 @@ namespace ScouterXR.Core
             // Check AR subsystem health
             if (arFeatureManager != null)
             {
-                var arSession = FindObjectOfType<ARSession>();
+                var arSession = FindFirstObjectByType<ARSession>();
                 if (arSession != null && arSession.subsystem == null)
                 {
                     SystemLogger.LogError("FallbackManager", "AR subsystem not available");

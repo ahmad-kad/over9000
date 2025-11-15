@@ -197,9 +197,9 @@ namespace ScouterXR.UI
             sb.AppendLine($"Graphics: {SystemInfo.graphicsDeviceName}");
 
             // Log file info
-            if (FindObjectOfType<SystemLogger>() != null)
+            if (FindFirstObjectByType<SystemLogger>() != null)
             {
-                var logger = FindObjectOfType<SystemLogger>();
+                var logger = FindFirstObjectByType<SystemLogger>();
                 sb.AppendLine($"Log Size: {logger.GetLogFileSize() / 1024}KB");
             }
 

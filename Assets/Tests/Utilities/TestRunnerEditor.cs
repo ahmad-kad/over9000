@@ -22,7 +22,7 @@ namespace ScouterXR.Editor
             scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
 
             // Find test runner in scene
-            var testRunner = FindObjectOfType<TestRunner>();
+            var testRunner = FindFirstObjectByType<TestRunner>();
 
             if (testRunner == null)
             {
@@ -75,20 +75,20 @@ namespace ScouterXR.Editor
                 // System health info
                 EditorGUILayout.LabelField("System Health", EditorStyles.boldLabel);
 
-                var perfMonitor = FindObjectOfType<ScouterXR.Core.PerformanceMonitor>();
+                var perfMonitor = FindFirstObjectByType<ScouterXR.Core.PerformanceMonitor>();
                 if (perfMonitor != null)
                 {
                     EditorGUILayout.LabelField("Average FPS:", perfMonitor.GetAverageFPS().ToString("F1"));
                     EditorGUILayout.LabelField("Memory Usage:", perfMonitor.GetMemoryUsageMB() + " MB");
                 }
 
-                var poseEstimator = FindObjectOfType<ScouterXR.AI.MediaPipePoseEstimator>();
+                var poseEstimator = FindFirstObjectByType<ScouterXR.AI.MediaPipePoseEstimator>();
                 if (poseEstimator != null)
                 {
                     EditorGUILayout.LabelField("Estimated Depth:", poseEstimator.GetCurrentEstimatedDepth().ToString("F1") + "m");
                 }
 
-                var arManager = FindObjectOfType<ScouterXR.AR.ArFeatureManager>();
+                var arManager = FindFirstObjectByType<ScouterXR.AR.ArFeatureManager>();
                 if (arManager != null)
                 {
                     EditorGUILayout.LabelField("AR Mode:", arManager.GetCurrentOcclusionMode().ToString());

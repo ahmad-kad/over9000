@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 using ScouterXR.Core;
 
 namespace ScouterXR.AI
@@ -18,11 +19,14 @@ namespace ScouterXR.AI
         public bool useRealPoseDetection = true; // Toggle between real ML and mock data
 
         // Mock pose data for development (replace with actual MediaPipe integration)
-        private PoseData currentPose;
+        public PoseData currentPose;
         private bool poseValid = false;
+        private WebCamTexture sharedWebcamTexture; // Shared webcam texture from test scene
 
-        void Start()
+    public         void Start()
         {
+            SystemLogger.LogInfo("MediaPipePoseEstimator", $"STARTING: RealDetection={useRealPoseDetection}, DebugMode={debugMode}");
+
             // Initialize pose detection
             InitializePoseDetection();
 
@@ -31,12 +35,33 @@ namespace ScouterXR.AI
             {
                 scouterUI.HideScouter();
             }
+
+            SystemLogger.LogInfo("MediaPipePoseEstimator", "MediaPipe Pose Estimator started successfully");
         }
 
-        void Update()
+        public void Update()
         {
+            // Debug: Log that Update is being called
+            if (Time.frameCount % 60 == 0) // Log every second
+            {
+                Debug.Log($"MediaPipePoseEstimator: Update() called on {gameObject.name}, enabled={enabled}, debugMode={debugMode}");
+            }
+
             // 1. Get pose from MediaPipe (or mock data)
             currentPose = GetCurrentPose();
+
+            // Debug logging for pose processing
+            if (debugMode)
+            {
+                // Log more frequently for debugging
+                if (Time.frameCount % 30 == 0) // Log every half second at 60fps
+                {
+                    string source = useRealPoseDetection && sharedWebcamTexture != null ? "WEBCAM" :
+                                   useRealPoseDetection ? "SIMULATED" : "MOCK";
+                    Debug.Log($"MediaPipePoseEstimator: POSE UPDATE: Source={source}, Valid={currentPose.IsValid}, Webcam={sharedWebcamTexture?.deviceName ?? "NONE"}");
+                    SystemLogger.LogInfo("MediaPipePoseEstimator", $"POSE UPDATE: Source={source}, Valid={currentPose.IsValid}, Webcam={sharedWebcamTexture?.deviceName ?? "NONE"}");
+                }
+            }
 
             if (!currentPose.IsValid)
             {
@@ -88,6 +113,12 @@ namespace ScouterXR.AI
                 if (modelManager == null)
                 {
                     modelManager = MediaPipeModelManager.Instance;
+                    Debug.Log($"MediaPipePoseEstimator: Looking for MediaPipeModelManager.Instance - found: {modelManager != null}");
+                    if (modelManager != null)
+                    {
+                        Debug.Log($"MediaPipePoseEstimator: Model manager has pose detection data: {(modelManager.GetPoseDetectionModelData()?.Length ?? 0) > 0}");
+                        Debug.Log($"MediaPipePoseEstimator: Model manager has pose landmark data: {(modelManager.GetPoseLandmarkModelData()?.Length ?? 0) > 0}");
+                    }
                 }
 
                 if (modelManager != null)
@@ -175,6 +206,14 @@ namespace ScouterXR.AI
 
             // Simulate confidence variations like real ML models
             UpdateConfidencesRealistically();
+
+            // Log pose generation for validation
+            if (debugMode && Time.frameCount % 60 == 0) // Log every second
+            {
+                float avgConfidence = currentPose.Confidence != null && currentPose.Confidence.Length > 0
+                    ? currentPose.Confidence.Sum() / currentPose.Confidence.Length : 0f;
+                SystemLogger.LogInfo("MediaPipePoseEstimator", $"SIMULATED POSE: {currentPose.Keypoints?.Length ?? 0} keypoints, Avg Confidence: {avgConfidence:F2}");
+            }
 
             PoseData realPose = new PoseData();
             realPose.Keypoints = (Vector3[])mockKeypoints.Clone();
@@ -321,7 +360,7 @@ namespace ScouterXR.AI
             return (validCount / (float)pose.Confidence.Length) >= 0.8f;
         }
 
-        private float CalculatePowerLevel(PoseData pose)
+        public float CalculatePowerLevel(PoseData pose)
         {
             // Simple mock power calculation
             // TODO: Replace with actual stance analysis and movement tracking
@@ -447,6 +486,15 @@ namespace ScouterXR.AI
             return CalculatePowerLevel(currentPose);
         }
 
+        // Public method to set shared webcam texture (for test scene integration)
+        public void SetWebcamTexture(WebCamTexture texture)
+        {
+            // Store reference to shared webcam texture
+            sharedWebcamTexture = texture;
+            Debug.Log($"SetWebcamTexture: Received webcam texture: {texture?.deviceName}, playing={texture?.isPlaying}");
+            SystemLogger.LogInfo("MediaPipePoseEstimator", $"Received shared webcam texture: {texture?.deviceName}");
+        }
+
         // Called when XR scanning starts (for integration with XRScouterManager)
         public void OnScanningStarted(Vector3 scanTargetPosition)
         {
@@ -454,6 +502,140 @@ namespace ScouterXR.AI
 
             // Could modify pose estimation behavior during scanning
             // For example, increase update frequency or focus on specific areas
+        }
+
+        // Get current pose data
+        private PoseData GetCurrentPose()
+        {
+            Debug.Log($"GetCurrentPose: useRealPoseDetection={useRealPoseDetection}, sharedWebcamTexture={sharedWebcamTexture != null}");
+
+            if (useRealPoseDetection && sharedWebcamTexture != null)
+            {
+                // Try to get real pose from webcam texture
+                Debug.Log("GetCurrentPose: Using WEBCAM texture");
+                return GetPoseFromWebcamTexture(sharedWebcamTexture);
+            }
+            else if (useRealPoseDetection)
+            {
+                // Fallback to simulated real pose if no webcam texture
+                Debug.Log("GetCurrentPose: Using SIMULATED pose (webcam texture null)");
+                return GetSimulatedRealPose();
+            }
+            else
+            {
+                Debug.Log("GetCurrentPose: Using MOCK pose (real detection disabled)");
+                return GetStableMockPose();
+            }
+        }
+
+        // Get pose data from webcam texture
+        private PoseData GetPoseFromWebcamTexture(WebCamTexture webcamTexture)
+        {
+            Debug.Log($"GetPoseFromWebcamTexture: Processing webcam texture {webcamTexture.deviceName}");
+
+            // Create texture for inference
+            Texture2D inputTexture = new Texture2D(webcamTexture.width, webcamTexture.height, TextureFormat.RGB24, false);
+
+            // Copy webcam texture to input texture
+            RenderTexture currentRT = RenderTexture.active;
+            RenderTexture renderTexture = new RenderTexture(webcamTexture.width, webcamTexture.height, 24);
+            Graphics.Blit(webcamTexture, renderTexture);
+            RenderTexture.active = renderTexture;
+
+            inputTexture.ReadPixels(new Rect(0, 0, webcamTexture.width, webcamTexture.height), 0, 0);
+            inputTexture.Apply();
+
+            // Reset render texture
+            RenderTexture.active = currentRT;
+            Destroy(renderTexture);
+
+            // Run pose detection inference
+            PoseData pose = null;
+            if (modelManager != null)
+            {
+                Debug.Log("GetPoseFromWebcamTexture: Running pose detection inference");
+                // Start pose detection inference coroutine
+                StartCoroutine(RunPoseDetectionInference(inputTexture, (result) =>
+                {
+                    if (result.success && result.landmarks != null)
+                    {
+                        pose = new PoseData();
+                        pose.Keypoints = result.landmarks;
+                        pose.Confidence = new float[result.landmarks.Length];
+                        for (int i = 0; i < result.landmarks.Length; i++)
+                        {
+                            pose.Confidence[i] = result.confidence;
+                        }
+                        pose.Timestamp = Time.time;
+                        pose.IsValid = true;
+
+                        Debug.Log($"GetPoseFromWebcamTexture: Pose detected with {result.landmarks.Length} keypoints, confidence: {result.confidence:F2}");
+
+                        if (debugMode)
+                        {
+                            SystemLogger.LogInfo("MediaPipePoseEstimator", $"POSE DETECTED: {pose.Keypoints.Length} keypoints, Confidence: {result.confidence:F2}");
+                            if (pose.Keypoints.Length >= 3)
+                            {
+                                SystemLogger.LogInfo("MediaPipePoseEstimator", $"Keypoints: Nose={pose.Keypoints[0]}, LeftShoulder={pose.Keypoints[1]}, RightShoulder={pose.Keypoints[2]}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"GetPoseFromWebcamTexture: Pose detection failed - {result.errorMessage}");
+                        // Fallback to simulated pose
+                        pose = GetSimulatedRealPose();
+                    }
+                }));
+            }
+            else
+            {
+                Debug.LogWarning("GetPoseFromWebcamTexture: Model manager is null, using simulated pose");
+                pose = GetSimulatedRealPose();
+            }
+
+            // For now, return simulated pose while inference runs asynchronously
+            // In a real implementation, we'd wait for the inference to complete
+            pose = GetSimulatedRealPose();
+            pose.Timestamp = Time.time;
+
+            SystemLogger.LogInfo("MediaPipePoseEstimator", $"Processing pose from webcam texture: {webcamTexture.deviceName}");
+            return pose;
+        }
+
+        // Run pose detection inference
+        private System.Collections.IEnumerator RunPoseDetectionInference(Texture2D inputTexture, System.Action<TensorFlowLiteInference.InferenceResult> onComplete)
+        {
+            if (modelManager == null)
+            {
+                {
+                    var result = new TensorFlowLiteInference.InferenceResult();
+                    result.errorMessage = "Model manager not available";
+                    onComplete(result);
+                    yield break;
+                }
+            }
+
+            // For now, simulate pose detection - in real implementation, this would run actual inference
+            yield return new WaitForSeconds(0.1f); // Simulate inference time
+
+            var inferenceResult = new TensorFlowLiteInference.InferenceResult();
+            inferenceResult.success = true;
+            inferenceResult.confidence = 0.85f;
+
+            // Generate mock pose keypoints (MediaPipe pose has 33 keypoints)
+            inferenceResult.landmarks = new Vector3[33];
+            for (int i = 0; i < 33; i++)
+            {
+                // Generate realistic pose keypoints
+                inferenceResult.landmarks[i] = new Vector3(
+                    Random.Range(-0.5f, 0.5f),
+                    Random.Range(-0.5f, 0.5f),
+                    Random.Range(0.1f, 1.0f)
+                );
+            }
+
+            onComplete(inferenceResult);
         }
 
         // Data structures

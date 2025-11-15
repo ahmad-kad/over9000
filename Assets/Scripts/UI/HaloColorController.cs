@@ -30,7 +30,7 @@ namespace ScouterXR.UI
             }
         }
 
-        void Update()
+        public void Update()
         {
             if (haloMaterial == null) return;
 

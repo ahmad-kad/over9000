@@ -144,7 +144,7 @@ namespace ScouterXR.Tests.Utilities
             }
 
             // Check frame rate
-            var perfMonitor = FindObjectOfType<PerformanceMonitor>();
+            var perfMonitor = FindFirstObjectByType<PerformanceMonitor>();
             if (perfMonitor != null)
             {
                 float avgFPS = perfMonitor.GetAverageFPS();
@@ -162,7 +162,7 @@ namespace ScouterXR.Tests.Utilities
 
         private void TestPoseSystem()
         {
-            var poseEstimator = FindObjectOfType<ScouterXR.AI.MediaPipePoseEstimator>();
+            var poseEstimator = FindFirstObjectByType<ScouterXR.AI.MediaPipePoseEstimator>();
             if (poseEstimator != null)
             {
                 float depth = poseEstimator.GetCurrentEstimatedDepth();
@@ -179,7 +179,7 @@ namespace ScouterXR.Tests.Utilities
 
         private void TestUISystem()
         {
-            var scouterUI = FindObjectOfType<ScouterXR.UI.ScouterUI>();
+            var scouterUI = FindFirstObjectByType<ScouterXR.UI.ScouterUI>();
             if (scouterUI != null)
             {
                 SystemLogger.LogInfo("TestRunner", "UI system OK: Components found");
@@ -192,7 +192,7 @@ namespace ScouterXR.Tests.Utilities
 
         private void TestAudioSystem()
         {
-            var spatialAudio = FindObjectOfType<ScouterXR.Core.SpatialAudioController>();
+            var spatialAudio = FindFirstObjectByType<ScouterXR.Core.SpatialAudioController>();
             if (spatialAudio != null)
             {
                 var audioSource = spatialAudio.GetComponent<AudioSource>();
@@ -210,9 +210,9 @@ namespace ScouterXR.Tests.Utilities
         private void TestSystemIntegration()
         {
             // Test that all systems can communicate
-            var poseEstimator = FindObjectOfType<ScouterXR.AI.MediaPipePoseEstimator>();
-            var scouterUI = FindObjectOfType<ScouterXR.UI.ScouterUI>();
-            var haloController = FindObjectOfType<ScouterXR.UI.HaloColorController>();
+            var poseEstimator = FindFirstObjectByType<ScouterXR.AI.MediaPipePoseEstimator>();
+            var scouterUI = FindFirstObjectByType<ScouterXR.UI.ScouterUI>();
+            var haloController = FindFirstObjectByType<ScouterXR.UI.HaloColorController>();
 
             if (poseEstimator != null && scouterUI != null && haloController != null)
             {
@@ -239,7 +239,7 @@ namespace ScouterXR.Tests.Utilities
                 System.Type componentType = System.Type.GetType(componentName);
                 if (componentType != null)
                 {
-                    var component = FindObjectOfType(componentType);
+                    var component = FindFirstObjectByType(componentType);
                     if (component == null)
                     {
                         SystemLogger.LogError("TestRunner", $"Critical component missing: {componentName}");
