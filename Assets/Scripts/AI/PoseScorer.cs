@@ -35,36 +35,36 @@ namespace ScouterXR.AI
 
             float score = 0f;
 
-            // Base score from detection confidence (0-1500) - INCREASED
-            score += confidence * 1500f;
+            // Base score from detection confidence (0-1000) - REDUCED
+            score += confidence * 1000f;
 
-            // Visibility bonus - clear, well-lit poses score higher (0-1000) - INCREASED
+            // Visibility bonus - clear, well-lit poses score higher (0-600) - REDUCED
             float avgVisibility = CalculateAverageVisibility(pose);
-            score += avgVisibility * 1000f;
+            score += avgVisibility * 600f;
 
-            // Pose symmetry - balanced poses score higher (0-1500) - INCREASED
+            // Pose symmetry - balanced poses score higher (0-900) - REDUCED
             float symmetry = CalculatePoseSymmetry(pose);
-            score += symmetry * 1500f;
+            score += symmetry * 900f;
 
-            // Arm extension - arms spread wide = power pose (0-2500) - INCREASED
+            // Arm extension - arms spread wide = power pose (0-1500) - REDUCED
             float armExtension = CalculateArmExtension(pose);
-            score += armExtension * 2500f;
+            score += armExtension * 1500f;
 
-            // Stance width - wide stance = strong pose (0-2000) - INCREASED
+            // Stance width - wide stance = strong pose (0-1200) - REDUCED
             float stanceWidth = CalculateStanceWidth(pose);
-            score += stanceWidth * 2000f;
+            score += stanceWidth * 1200f;
 
-            // Height/posture - upright posture scores higher (0-1500) - INCREASED
+            // Height/posture - upright posture scores higher (0-900) - REDUCED
             float posture = CalculatePosture(pose);
-            score += posture * 1500f;
+            score += posture * 900f;
 
             // Action bonus - dynamic poses (punching, kicking) get multipliers
             float actionBonus = DetectActionPose(pose);
-            score *= (1f + actionBonus * 1.5f); // INCREASED multiplier effect
+            score *= (1f + actionBonus * 1.0f); // REDUCED multiplier effect
 
             // Energy multiplier based on overall body engagement
             float energy = CalculateBodyEngagement(pose);
-            score *= (0.8f + energy * 0.8f); // INCREASED energy effect
+            score *= (0.8f + energy * 0.4f); // REDUCED energy effect
 
             return Mathf.Clamp(score, 0f, 9999f);
         }
@@ -126,9 +126,9 @@ namespace ScouterXR.AI
             float leftArmExtension = Mathf.Abs(lm[LEFT_WRIST].x - bodyCenter) / shoulderWidth;
             float rightArmExtension = Mathf.Abs(lm[RIGHT_WRIST].x - bodyCenter) / shoulderWidth;
 
-            // Arms spread wide = higher score (made more sensitive)
+            // Arms spread wide = higher score (reduced sensitivity)
             float extension = (leftArmExtension + rightArmExtension) / 2f;
-            return Mathf.Clamp01(extension * 1.5f); // INCREASED sensitivity
+            return Mathf.Clamp01(extension * 1.0f); // REDUCED sensitivity
         }
 
         private static float CalculateStanceWidth(PoseData pose)
@@ -139,24 +139,24 @@ namespace ScouterXR.AI
             float ankleDistance = Vector3.Distance(lm[LEFT_ANKLE], lm[RIGHT_ANKLE]);
             float shoulderWidth = Vector3.Distance(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
 
-            // Wider stance relative to shoulders = stronger pose (made more sensitive)
+            // Wider stance relative to shoulders = stronger pose (reduced sensitivity)
             float stanceRatio = ankleDistance / (shoulderWidth + 0.01f);
-            return Mathf.Clamp01(stanceRatio / 1.2f); // INCREASED sensitivity (was /2f)
+            return Mathf.Clamp01(stanceRatio / 1.8f); // REDUCED sensitivity (was /1.2f)
         }
 
         private static float CalculatePosture(PoseData pose)
         {
             Vector3[] lm = pose.landmarks;
 
-            // Measure vertical alignment (nose over hips) - more forgiving
+            // Measure vertical alignment (nose over hips) - balanced tolerance
             float noseX = lm[NOSE].x;
             float hipCenterX = (lm[LEFT_HIP].x + lm[RIGHT_HIP].x) / 2f;
-            float alignment = 1f - Mathf.Abs(noseX - hipCenterX) * 3f; // INCREASED tolerance (was *5f)
+            float alignment = 1f - Mathf.Abs(noseX - hipCenterX) * 4f; // BALANCED tolerance
 
-            // Measure vertical extension (head high above hips) - more sensitive
+            // Measure vertical extension (head high above hips) - reduced sensitivity
             float noseY = lm[NOSE].y;
             float hipCenterY = (lm[LEFT_HIP].y + lm[RIGHT_HIP].y) / 2f;
-            float height = Mathf.Clamp01((noseY - hipCenterY) * 3f); // INCREASED sensitivity (was *2f)
+            float height = Mathf.Clamp01((noseY - hipCenterY) * 1.5f); // REDUCED sensitivity (was *3f)
 
             return Mathf.Clamp01((alignment + height) / 2f);
         }
@@ -201,7 +201,7 @@ namespace ScouterXR.AI
         {
             Vector3[] lm = pose.landmarks;
 
-            // Measure overall body spread/activation (more sensitive)
+            // Measure overall body spread/activation (reduced sensitivity)
             float bodySpan = 0f;
 
             // Arm span
@@ -213,8 +213,8 @@ namespace ScouterXR.AI
             // Torso height
             bodySpan += Vector3.Distance(lm[NOSE], (lm[LEFT_HIP] + lm[RIGHT_HIP]) / 2f);
 
-            // Normalize to 0-1 range (larger values = more engaged body) - more sensitive
-            return Mathf.Clamp01(bodySpan / 2f); // INCREASED sensitivity (was /3f)
+            // Normalize to 0-1 range (larger values = more engaged body) - reduced sensitivity
+            return Mathf.Clamp01(bodySpan / 4f); // REDUCED sensitivity (was /2f)
         }
 
         /// <summary>
