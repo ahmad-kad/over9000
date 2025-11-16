@@ -1,70 +1,156 @@
-# MediaPipe Camera Feed Demo
+# 🚀 Over 9000! - Dragon Ball Z Pose Scouter
 
-This repository now focuses on a single goal: running MediaPipe pose tracking
-directly on the local camera feed with the fewest moving parts possible. All XR,
-spatial audio, and Scouter-specific scripts were removed so the project boots
-straight into a clean pose-overlay experience.
+**"What does the Scouter say about his power level?"**
 
-## Quick Start
+This is an augmented reality pose estimation system that uses MediaPipe and machine learning to analyze your body pose and give you a **power level reading** just like the Scouters from Dragon Ball Z! Strike powerful poses and watch your power level climb from "Weak" all the way to **"OVER 9000!!!"** 🔥
 
-1. Open the project in Unity 2022.3+ (any URP/LTS build works).
-2. Press Play in an empty scene – `PoseCameraController` bootstraps itself if it
-   does not already exist in the hierarchy.
-3. Grant camera permissions. The game view shows the webcam texture plus
-   MediaPipe landmarks rendered on top.
+## 🎯 Features
 
-### Disable auto-bootstrap
+- **Real-time Pose Tracking**: Uses MediaPipe BlazePose to detect 33 body landmarks
+- **Power Level Scoring**: Analyzes pose strength, confidence, symmetry, and action poses
+- **XR Ready**: Built for AR/VR experiences with Unity XR
+- **Dragon Ball Z Theming**: Scouter-inspired UI with power level classifications
+- **Multiple Visualizers**: Choose from simple dots or enhanced skeleton rendering
+- **Performance Optimized**: Runs smoothly on mobile devices and desktops
 
-If you prefer manual control, add the scripting define symbol
-`POSE_DEMO_DISABLE_AUTOCREATE` (Project Settings → Player) and drop
-`PoseCameraController` into any scene to manage it yourself.
+## 🏃 Quick Start
 
-## Key Files
+1. **Open in Unity 6.0+** (URP required)
+2. **Load the SampleScene**
+3. **Press Play** and grant camera permissions
+4. **Strike a pose!** - Spread your arms, stand tall, punch the air
+5. **Watch your power level rise!**
 
-| Path | Purpose |
-| ---- | ------- |
-| `Assets/Scripts/PoseDemo/PoseCameraController.cs` | Starts the webcam, runs the TensorFlow Lite pose detection + landmark models, and feeds results to the overlay UI. |
-| `Assets/Scripts/PoseDemo/PoseOverlayUI.cs` | Draws 33 landmark markers in normalized screen space. |
-| `Assets/Scripts/AI/PoseDetect.cs` & `PoseLandmarkDetect.cs` | Upstream TensorFlow Lite tasks sourced from the MediaPipe Unity sample; kept verbatim for clarity. |
-| `Assets/StreamingAssets/Models/*.tflite` | BlazePose models used at runtime. |
-
-## Customisation Tips
-
-- **Camera selection**: Toggle `preferFrontCamera` on the controller to prefer a
-  front-facing lens. Resolution/FPS can also be changed via serialized fields.
-- **Landmark visuals**: Update the marker color, size, or threshold on
-  `PoseOverlayUI` to match your UI style.
-- **Performance**: Lower `cameraResolution` or the detection score threshold if
-  you need faster updates on low-powered hardware.
-- **Extending output**: Subscribe to the resulting `PoseLandmarkDetect.Result`
-  inside `PoseCameraController.RunPosePipeline()` to drive custom gameplay or
-  analytics.
-
-## Folder Layout
+## 📁 Project Structure
 
 ```
 Assets/
-  Scripts/
-    AI/                # TensorFlow Lite pose tasks (minimal, no app logic)
-    PoseDemo/          # Runtime controller + overlay UI
-  StreamingAssets/
-    Models/            # BlazePose .tflite files
+├── Scripts/
+│   ├── AI/                    # ML inference and pose processing
+│   │   ├── PoseScorer.cs      # Calculates power levels (the magic!)
+│   │   ├── TFLiteModelRunner.cs # MediaPipe integration
+│   │   └── EnhancedPoseVisualizer.cs # Fancy skeleton rendering
+│   ├── Core/                  # Scene setup and XR management
+│   │   ├── ScouterSceneSetup.cs # DBZ-themed scene bootstrap
+│   │   └── XRTestSceneSetup.cs # XR configuration
+│   └── UI/                    # User interface components
+│       └── PoseVisualizer.cs  # Landmark visualization
+├── StreamingAssets/
+│   └── Models/                # MediaPipe BlazePose .tflite models
+├── Scenes/
+│   └── SampleScene.unity      # Main demo scene
+└── Resources/
+    └── Audio/SFX/             # Sound effects (glass shatter, etc.)
 ```
 
-Everything else is standard Unity boilerplate (Packages, ProjectSettings, etc.)
-and can remain untouched.
+## ⚙️ How Power Levels Work
 
-## Troubleshooting
+The scoring system analyzes multiple pose factors:
 
-- **Black screen**: Ensure the webcam is not used by another app. Stop Play mode
-  and try again; `WebCamInput` will iterate through available devices.
-- **No landmarks**: Confirm the `.tflite` model files exist inside
-  `Assets/StreamingAssets/Models`. You can swap in custom MediaPipe models by
-  replacing those files.
-- **Orientation issues**: `WebCamInput` normalises orientation, but some laptop
-  webcams misreport rotations. Adjust `cameraResolution` to a square aspect to
-  verify alignment, then tweak as needed.
+- **Confidence** (0-1000): How sure the AI is about pose detection
+- **Visibility** (0-600): Clear view of body parts
+- **Symmetry** (0-900): Balanced left/right pose
+- **Arm Extension** (0-1500): Arms spread wide = power pose!
+- **Stance Width** (0-1200): Wide stance = stronger presence
+- **Posture** (0-900): Upright, confident posture
+- **Action Bonus** (1.0x): Punching, kicking, arms raised = multipliers
+- **Body Engagement** (0.4x): Overall pose dynamism
 
-Happy hacking!
+### Power Level Classifications:
+- **0-999**: Weak
+- **1000-2499**: Low
+- **2500-4499**: Average
+- **4500-6499**: Strong
+- **6500-7999**: Powerful
+- **8000-9199**: Elite
+- **9200+**: OVER 9000!!!
+
+## 🎮 Customization
+
+### Adjust Sensitivity
+Modify `Assets/Scripts/AI/PoseScorer.cs` to tune the scoring algorithm:
+- Increase multipliers for more sensitive detection
+- Decrease thresholds for harder-to-achieve high scores
+
+### Visual Themes
+- **Enhanced Visualizer**: Full skeleton with bones and joints
+- **Simple Visualizer**: Just landmark dots
+- **Scouter UI**: Dragon Ball Z themed power level display
+
+### Camera Settings
+- Front/back camera selection
+- Resolution and FPS controls
+- Detection confidence thresholds
+
+## 🔧 Requirements
+
+- **Unity 6.0+** (tested on 6000.0.39f1)
+- **Universal Render Pipeline (URP)**
+- **Webcam** (built-in or external)
+- **Target Platforms**: Windows, macOS, Android, iOS
+
+## 📱 Mobile Support
+
+The project includes mobile-optimized settings and works on:
+- **Android** (ARM64, with camera permissions)
+- **iOS** (with camera permissions)
+- Touch controls for VR/AR interactions
+
+## 🐛 Troubleshooting
+
+### No Camera Feed
+- Check camera permissions in system settings
+- Ensure no other apps are using the camera
+- Try different camera resolution settings
+
+### Low Power Levels
+- Stand in well-lit areas
+- Face the camera directly
+- Try more dynamic poses (arms raised, wide stance)
+- Adjust scoring sensitivity in `PoseScorer.cs`
+
+### Performance Issues
+- Lower camera resolution in `PoseCameraController`
+- Increase detection score threshold
+- Reduce landmark update frequency
+
+### Build Issues
+- Ensure all required packages are installed
+- Check that MediaPipe models are in `StreamingAssets/Models/`
+- Verify URP is properly configured
+
+## 🎨 Extending the Project
+
+### Add New Pose Types
+1. Extend `PoseScorer.cs` with new detection methods
+2. Add multipliers for specific pose combinations
+3. Create custom power level categories
+
+### Custom UI Themes
+- Modify `EnhancedPoseVisualizer.cs` for new visual styles
+- Add sound effects for power level changes
+- Create VR/AR specific UI elements
+
+### Multiplayer Features
+- Add network synchronization for power level comparisons
+- Create pose challenges and leaderboards
+- Implement combo systems for pose sequences
+
+## 📄 License
+
+This project is open source and available under the MIT License. Feel free to use it for your own Dragon Ball Z fan projects!
+
+## 🙏 Credits
+
+- **MediaPipe**: Pose estimation models and Unity integration
+- **Unity**: XR and rendering framework
+- **Dragon Ball Z**: The inspiration for power levels and Scouters
+- **TensorFlow Lite**: Machine learning inference
+
+---
+
+**"OVER 9000?!?! There\'s no way that can be right!"**
+
+Start posing and see if you can break the scouter! 💪⚡
 
 

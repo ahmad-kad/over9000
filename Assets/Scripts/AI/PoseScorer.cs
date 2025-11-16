@@ -35,36 +35,36 @@ namespace ScouterXR.AI
 
             float score = 0f;
 
-            // Base score from detection confidence (0-1000)
+            // Base score from detection confidence (0-1000) - REDUCED
             score += confidence * 1000f;
 
-            // Visibility bonus - clear, well-lit poses score higher (0-500)
+            // Visibility bonus - clear, well-lit poses score higher (0-600) - REDUCED
             float avgVisibility = CalculateAverageVisibility(pose);
-            score += avgVisibility * 500f;
+            score += avgVisibility * 600f;
 
-            // Pose symmetry - balanced poses score higher (0-1000)
+            // Pose symmetry - balanced poses score higher (0-900) - REDUCED
             float symmetry = CalculatePoseSymmetry(pose);
-            score += symmetry * 1000f;
+            score += symmetry * 900f;
 
-            // Arm extension - arms spread wide = power pose (0-1500)
+            // Arm extension - arms spread wide = power pose (0-1500) - REDUCED
             float armExtension = CalculateArmExtension(pose);
             score += armExtension * 1500f;
 
-            // Stance width - wide stance = strong pose (0-1000)
+            // Stance width - wide stance = strong pose (0-1200) - REDUCED
             float stanceWidth = CalculateStanceWidth(pose);
-            score += stanceWidth * 1000f;
+            score += stanceWidth * 1200f;
 
-            // Height/posture - upright posture scores higher (0-800)
+            // Height/posture - upright posture scores higher (0-900) - REDUCED
             float posture = CalculatePosture(pose);
-            score += posture * 800f;
+            score += posture * 900f;
 
             // Action bonus - dynamic poses (punching, kicking) get multipliers
             float actionBonus = DetectActionPose(pose);
-            score *= (1f + actionBonus);
+            score *= (1f + actionBonus * 1.0f); // REDUCED multiplier effect
 
             // Energy multiplier based on overall body engagement
             float energy = CalculateBodyEngagement(pose);
-            score *= (0.5f + energy * 0.5f);
+            score *= (0.8f + energy * 0.4f); // REDUCED energy effect
 
             return Mathf.Clamp(score, 0f, 9999f);
         }
@@ -118,46 +118,46 @@ namespace ScouterXR.AI
         private static float CalculateArmExtension(PoseData pose)
         {
             Vector3[] lm = pose.landmarks;
-            
+
             // Measure how far arms are extended from body
             float shoulderWidth = Vector3.Distance(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
             float bodyCenter = (lm[LEFT_SHOULDER].x + lm[RIGHT_SHOULDER].x) / 2f;
-            
+
             float leftArmExtension = Mathf.Abs(lm[LEFT_WRIST].x - bodyCenter) / shoulderWidth;
             float rightArmExtension = Mathf.Abs(lm[RIGHT_WRIST].x - bodyCenter) / shoulderWidth;
-            
-            // Arms spread wide = higher score
+
+            // Arms spread wide = higher score (reduced sensitivity)
             float extension = (leftArmExtension + rightArmExtension) / 2f;
-            return Mathf.Clamp01(extension);
+            return Mathf.Clamp01(extension * 1.0f); // REDUCED sensitivity
         }
 
         private static float CalculateStanceWidth(PoseData pose)
         {
             Vector3[] lm = pose.landmarks;
-            
+
             // Measure leg separation
             float ankleDistance = Vector3.Distance(lm[LEFT_ANKLE], lm[RIGHT_ANKLE]);
             float shoulderWidth = Vector3.Distance(lm[LEFT_SHOULDER], lm[RIGHT_SHOULDER]);
-            
-            // Wider stance relative to shoulders = stronger pose
+
+            // Wider stance relative to shoulders = stronger pose (reduced sensitivity)
             float stanceRatio = ankleDistance / (shoulderWidth + 0.01f);
-            return Mathf.Clamp01(stanceRatio / 2f); // Normalize
+            return Mathf.Clamp01(stanceRatio / 1.8f); // REDUCED sensitivity (was /1.2f)
         }
 
         private static float CalculatePosture(PoseData pose)
         {
             Vector3[] lm = pose.landmarks;
-            
-            // Measure vertical alignment (nose over hips)
+
+            // Measure vertical alignment (nose over hips) - balanced tolerance
             float noseX = lm[NOSE].x;
             float hipCenterX = (lm[LEFT_HIP].x + lm[RIGHT_HIP].x) / 2f;
-            float alignment = 1f - Mathf.Abs(noseX - hipCenterX) * 5f;
-            
-            // Measure vertical extension (head high above hips)
+            float alignment = 1f - Mathf.Abs(noseX - hipCenterX) * 4f; // BALANCED tolerance
+
+            // Measure vertical extension (head high above hips) - reduced sensitivity
             float noseY = lm[NOSE].y;
             float hipCenterY = (lm[LEFT_HIP].y + lm[RIGHT_HIP].y) / 2f;
-            float height = Mathf.Clamp01((noseY - hipCenterY) * 2f);
-            
+            float height = Mathf.Clamp01((noseY - hipCenterY) * 1.5f); // REDUCED sensitivity (was *3f)
+
             return Mathf.Clamp01((alignment + height) / 2f);
         }
 
@@ -200,21 +200,21 @@ namespace ScouterXR.AI
         private static float CalculateBodyEngagement(PoseData pose)
         {
             Vector3[] lm = pose.landmarks;
-            
-            // Measure overall body spread/activation
+
+            // Measure overall body spread/activation (reduced sensitivity)
             float bodySpan = 0f;
-            
+
             // Arm span
             bodySpan += Vector3.Distance(lm[LEFT_WRIST], lm[RIGHT_WRIST]);
-            
+
             // Leg span
             bodySpan += Vector3.Distance(lm[LEFT_ANKLE], lm[RIGHT_ANKLE]);
-            
+
             // Torso height
             bodySpan += Vector3.Distance(lm[NOSE], (lm[LEFT_HIP] + lm[RIGHT_HIP]) / 2f);
-            
-            // Normalize to 0-1 range (larger values = more engaged body)
-            return Mathf.Clamp01(bodySpan / 3f);
+
+            // Normalize to 0-1 range (larger values = more engaged body) - reduced sensitivity
+            return Mathf.Clamp01(bodySpan / 4f); // REDUCED sensitivity (was /2f)
         }
 
         /// <summary>
@@ -222,12 +222,12 @@ namespace ScouterXR.AI
         /// </summary>
         public static string GetPowerLevelDescription(float score)
         {
-            if (score < 500) return "Weak";
-            if (score < 1500) return "Low";
-            if (score < 3000) return "Average";
-            if (score < 5000) return "Strong";
-            if (score < 7000) return "Powerful";
-            if (score < 8500) return "Elite";
+            if (score < 1000) return "Weak";
+            if (score < 2500) return "Low";
+            if (score < 4500) return "Average";
+            if (score < 6500) return "Strong";
+            if (score < 8000) return "Powerful";
+            if (score < 9200) return "Elite";
             return "OVER 9000!!!";
         }
     }
