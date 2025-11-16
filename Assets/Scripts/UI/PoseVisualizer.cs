@@ -10,13 +10,19 @@ namespace ScouterXR.UI
         public HandPointingRecognizer handRecognizer;
         public Camera mainCamera;
 
-        [Header("Visualization Settings")]
-        public bool showPoseSkeleton = true;
-        public bool showHandLandmarks = true;
-        public bool debugMode = true; // Enable debug boundaries
-        public float landmarkSize = 0.01f;
-        public Color poseColor = Color.green;
-        public Color handColor = Color.blue;
+    [Header("Visualization Settings")]
+    public bool showPoseSkeleton = true;
+    public bool showHandLandmarks = true;
+    public bool debugMode = true; // Enable debug boundaries
+    public float landmarkSize = 0.01f;
+    public float poseDistance = 2.0f; // Distance from camera to project pose into world space
+    public Color poseColor = Color.green;
+    public Color handColor = Color.blue;
+
+    [Header("Camera Configuration")]
+    public int cameraWidth = 1280;  // Webcam width
+    public int cameraHeight = 720;  // Webcam height
+    public WebCamTexture webcamTexture;
 
         // Pose connections (MediaPipe pose landmark connections)
         private readonly int[,] poseConnections = new int[,]
@@ -68,10 +74,10 @@ namespace ScouterXR.UI
                 DrawDebugBoundaries();
             }
 
-            // Draw pose skeleton
-            if (showPoseSkeleton && poseEstimator != null && poseEstimator.currentPose != null && poseEstimator.currentPose.IsValid)
+            // Draw pose skeleton in 3D world space (proper for XR)
+            if (showPoseSkeleton && poseEstimator != null && poseEstimator.LatestLandmarks != null && poseEstimator.LatestConfidence > 0.3f)
             {
-                DrawPoseSkeletonOnGUI();
+                DrawPoseSkeletonInWorldSpace();
             }
 
             // Draw hand landmarks
@@ -83,9 +89,9 @@ namespace ScouterXR.UI
 
         private void DrawPoseSkeleton()
         {
-            if (poseEstimator.currentPose.Keypoints == null) return;
+            if (poseEstimator.LatestLandmarks == null) return;
 
-            Vector3[] keypoints = poseEstimator.currentPose.Keypoints;
+            Vector3[] keypoints = poseEstimator.LatestLandmarks;
 
             // Draw connections between keypoints
             for (int i = 0; i < poseConnections.GetLength(0); i++)
@@ -124,22 +130,26 @@ namespace ScouterXR.UI
 
         private void DrawHandLandmarks()
         {
-            // Get hand data from recognizer
-            var leftHand = handRecognizer.GetType().GetField("leftHand", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(handRecognizer) as HandPointingRecognizer.HandData;
-            var rightHand = handRecognizer.GetType().GetField("rightHand", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(handRecognizer) as HandPointingRecognizer.HandData;
-
-            // Draw left hand
-            if (leftHand != null && leftHand.isDetected && leftHand.landmarks != null)
+            // Get hand landmarks from recognizer
+            var landmarks = handRecognizer.LatestHandLandmarks;
+            
+            // Draw hand if detected (check if any landmark is non-zero)
+            if (landmarks != null && landmarks.Length > 0)
             {
-                DrawHandSkeleton(leftHand.landmarks, Color.cyan);
-            }
-
-            // Draw right hand
-            if (rightHand != null && rightHand.isDetected && rightHand.landmarks != null)
-            {
-                DrawHandSkeleton(rightHand.landmarks, handColor);
+                bool hasValidLandmarks = false;
+                for (int i = 0; i < landmarks.Length; i++)
+                {
+                    if (landmarks[i] != Vector3.zero)
+                    {
+                        hasValidLandmarks = true;
+                        break;
+                    }
+                }
+                
+                if (hasValidLandmarks)
+                {
+                    DrawHandSkeleton(landmarks, handColor);
+                }
             }
         }
 
@@ -248,19 +258,34 @@ namespace ScouterXR.UI
             }
 
             debugMaterial.SetPass(0);
+            
+            // Calculate actual display boundaries based on aspect ratio
+            float cameraAspectRatio = (float)cameraWidth / cameraHeight;
+            float screenAspectRatio = (float)Screen.width / Screen.height;
+            
+            float displayWidth, displayHeight, offsetX, offsetY;
+            if (cameraAspectRatio > screenAspectRatio)
+            {
+                displayWidth = Screen.width * 0.9f;
+                displayHeight = displayWidth / cameraAspectRatio;
+            }
+            else
+            {
+                displayHeight = Screen.height * 0.9f;
+                displayWidth = displayHeight * cameraAspectRatio;
+            }
+            
+            offsetX = (Screen.width - displayWidth) * 0.5f;
+            offsetY = (Screen.height - displayHeight) * 0.5f;
+            
+            // Draw webcam display area boundaries (red rectangle)
             GL.Begin(GL.LINES);
             GL.Color(Color.red);
 
-            // Draw webcam display area boundaries (red rectangle)
-            float marginX = Screen.width * 0.05f;
-            float marginY = Screen.height * 0.05f;
-            float displayWidth = Screen.width * 0.9f;
-            float displayHeight = Screen.height * 0.9f;
-
-            float left = marginX;
-            float right = marginX + displayWidth;
-            float bottom = marginY;
-            float top = marginY + displayHeight;
+            float left = offsetX;
+            float right = offsetX + displayWidth;
+            float bottom = offsetY;
+            float top = offsetY + displayHeight;
 
             // Bottom edge
             GL.Vertex3(left, bottom, 0);
@@ -308,11 +333,111 @@ namespace ScouterXR.UI
             CreatePersistentVisualization();
         }
 
+        private void DrawPoseSkeletonInWorldSpace()
+        {
+            if (poseEstimator == null)
+            {
+                if (debugMode && Time.frameCount % 300 == 0)
+                    Debug.LogWarning("PoseVisualizer: poseEstimator is NULL");
+                return;
+            }
+
+            if (poseEstimator.LatestLandmarks == null)
+            {
+                if (debugMode && Time.frameCount % 300 == 0)
+                    Debug.LogWarning($"PoseVisualizer: LatestLandmarks is NULL (confidence={poseEstimator.LatestConfidence:F3}, lastUpdate={poseEstimator.LastUpdateTime:F2}s)");
+                return;
+            }
+
+            Vector3[] keypoints = poseEstimator.LatestLandmarks;
+            
+            // Check if landmarks are valid (not all zero)
+            bool hasValidData = false;
+            for (int i = 0; i < keypoints.Length; i++)
+            {
+                if (keypoints[i] != Vector3.zero)
+                {
+                    hasValidData = true;
+                    break;
+                }
+            }
+            
+            if (!hasValidData)
+            {
+                if (debugMode && Time.frameCount % 300 == 0)
+                    Debug.LogWarning("PoseVisualizer: All landmarks are ZERO");
+                return;
+            }
+
+            // Debug: Log coordinate system
+            if (debugMode && Time.frameCount % 60 == 0 && keypoints.Length > 0)
+            {
+                Debug.Log($"PoseVisualizer: ✅ Drawing pose - Nose: {keypoints[0]}, Confidence: {poseEstimator.LatestConfidence:F3}, UpdateAge: {Time.time - poseEstimator.LastUpdateTime:F2}s");
+            }
+
+            // Convert 2D normalized image coordinates to 3D world space
+            Vector3[] worldKeypoints = ConvertImageCoordsToWorldSpace(keypoints);
+
+            // Draw the pose skeleton in 3D world space
+            DrawPoseSkeletonIn3D(worldKeypoints);
+        }
+
+        private Vector3[] ConvertImageCoordsToWorldSpace(Vector3[] imageKeypoints)
+        {
+            Vector3[] worldKeypoints = new Vector3[imageKeypoints.Length];
+
+            for (int i = 0; i < imageKeypoints.Length; i++)
+            {
+                // MediaPipe landmarks come in normalized coordinates (0-1)
+                // Y is already flipped in PoseLandmarkDetect output (line 227: 1f - y)
+                // So Y=0 is TOP, Y=1 is BOTTOM (matches screen coordinates)
+                
+                // Convert normalized image coordinates (0-1) to screen coordinates (pixels)
+                float screenX = imageKeypoints[i].x * Screen.width;
+                // Y is already in screen space orientation (0=top, 1=bottom)
+                // Unity screen coordinates have (0,0) at bottom-left, so we need to flip
+                float screenY = (1f - imageKeypoints[i].y) * Screen.height;
+
+                // Project screen coordinates to 3D world space at a fixed distance from camera
+                // This creates a ray from camera through the screen point
+                Vector3 worldPos = mainCamera.ScreenToWorldPoint(new Vector3(screenX, screenY, poseDistance));
+
+                worldKeypoints[i] = worldPos;
+            }
+
+            return worldKeypoints;
+        }
+
+        private void DrawPoseSkeletonIn3D(Vector3[] worldKeypoints)
+        {
+            // Draw connections between keypoints in 3D world space
+            for (int i = 0; i < poseConnections.GetLength(0); i++)
+            {
+                int startIdx = poseConnections[i, 0];
+                int endIdx = poseConnections[i, 1];
+
+                if (startIdx < worldKeypoints.Length && endIdx < worldKeypoints.Length)
+                {
+                    Vector3 startPos = worldKeypoints[startIdx];
+                    Vector3 endPos = worldKeypoints[endIdx];
+
+                    // Draw line in world space
+                    Debug.DrawLine(startPos, endPos, poseColor, 0.1f);
+                }
+            }
+
+            // Draw keypoints as small spheres in 3D world space
+            foreach (Vector3 keypoint in worldKeypoints)
+            {
+                DrawSphere(keypoint, landmarkSize, poseColor);
+            }
+        }
+
         private void DrawPoseSkeletonOnGUI()
         {
-            if (poseEstimator.currentPose.Keypoints == null) return;
+            if (poseEstimator.LatestLandmarks == null) return;
 
-            Vector3[] keypoints = poseEstimator.currentPose.Keypoints;
+            Vector3[] keypoints = poseEstimator.LatestLandmarks;
 
             GL.PushMatrix();
             GL.LoadPixelMatrix();
@@ -329,27 +454,13 @@ namespace ScouterXR.UI
             }
 
             poseMaterial.SetPass(0);
-            GL.Begin(GL.LINES);
-            GL.Color(poseColor);
+
+            // Calculate aspect-ratio aware display area with proper Y-flip transform
+            Matrix4x4 transform = CalculateImageToScreenTransform();
 
             // Draw connections between keypoints
-            // Keypoints are in normalized coordinates (0-1 range)
-            // Webcam display covers 90% of screen (5% margin on each side)
-            float marginX = Screen.width * 0.05f;  // 5% margin
-            float marginY = Screen.height * 0.05f; // 5% margin
-            float displayWidth = Screen.width * 0.9f;   // 90% of screen width
-            float displayHeight = Screen.height * 0.9f; // 90% of screen height
-
-            // Debug: Log coordinate mapping for first keypoint
-            if (keypoints.Length > 0 && Time.frameCount % 60 == 0)
-            {
-                Vector3 nose = keypoints[0]; // Nose keypoint
-                float screenX = marginX + (nose.x * displayWidth);
-                float screenY = marginY + (nose.y * displayHeight);
-                // Note: If skeleton appears upside down, the webcam texture might be flipped
-                // MediaPipe expects (0,0)=top-left, Unity webcam might be (0,0)=bottom-left
-                Debug.Log($"PoseVisualizer: Nose keypoint {nose} maps to screen ({screenX:F0}, {screenY:F0}) in area ({marginX:F0}-{marginX + displayWidth:F0}, {marginY:F0}-{marginY + displayHeight:F0})");
-            }
+            GL.Begin(GL.LINES);
+            GL.Color(poseColor);
 
             for (int i = 0; i < poseConnections.GetLength(0); i++)
             {
@@ -358,56 +469,149 @@ namespace ScouterXR.UI
 
                 if (startIdx < keypoints.Length && endIdx < keypoints.Length)
                 {
-                    Vector3 startPos = keypoints[startIdx];
-                    Vector3 endPos = keypoints[endIdx];
+                    Vector3 startPos = transform.MultiplyPoint(keypoints[startIdx]);
+                    Vector3 endPos = transform.MultiplyPoint(keypoints[endIdx]);
 
-                    // Convert normalized coordinates to webcam display area
-                    float startX = marginX + (startPos.x * displayWidth);
-                    float startY = marginY + (startPos.y * displayHeight);
-                    float endX = marginX + (endPos.x * displayWidth);
-                    float endY = marginY + (endPos.y * displayHeight);
-
-                    // Note: Y coordinate handling may need adjustment based on webcam texture orientation
-                    // MediaPipe: (0,0)=top-left, Unity UI: (0,0)=bottom-left
-                    // If skeleton appears upside down, add: startY = Screen.height - startY; etc.
-
-                    GL.Vertex3(startX, startY, 0);
-                    GL.Vertex3(endX, endY, 0);
+                    GL.Vertex3(startPos.x, startPos.y, 0);
+                    GL.Vertex3(endPos.x, endPos.y, 0);
                 }
             }
 
             GL.End();
 
-            // Draw keypoints as small circles
+            // Draw keypoints as small quads
             GL.Begin(GL.QUADS);
             GL.Color(poseColor);
 
-            foreach (Vector3 keypoint in keypoints)
-            {
-                // Convert normalized coordinates to webcam display area
-                float x = marginX + (keypoint.x * displayWidth);
-                float y = marginY + (keypoint.y * displayHeight);
-                // Note: Y flip removed - test if skeleton appears correctly
-                // If upside down, add: y = Screen.height - y;
-                float size = landmarkSize * 20; // Scale for screen
+            // MediaPipe keypoint labels
+            string[] poseLabels = new string[] {
+                "nose", "l_eye", "r_eye", "l_ear", "r_ear", "l_shoulder", "r_shoulder",
+                "l_elbow", "r_elbow", "l_wrist", "r_wrist", "l_hip", "r_hip",
+                "l_knee", "r_knee", "l_ankle", "r_ankle", "neck", "head", "l_eye_inner",
+                "r_eye_inner", "l_ear_inner", "r_ear_inner", "mouth_left", "mouth_right",
+                "l_hand", "r_hand", "l_foot_idx", "r_foot_idx", "l_foot", "r_foot",
+                "l_foot_idx2", "r_foot_idx2"
+            };
 
-                GL.Vertex3(x - size, y - size, 0);
-                GL.Vertex3(x + size, y - size, 0);
-                GL.Vertex3(x + size, y + size, 0);
-                GL.Vertex3(x - size, y + size, 0);
+            for (int i = 0; i < keypoints.Length; i++)
+            {
+                Vector3 screenPos = transform.MultiplyPoint(keypoints[i]);
+                float size = landmarkSize * 20;
+
+                GL.Vertex3(screenPos.x - size, screenPos.y - size, 0);
+                GL.Vertex3(screenPos.x + size, screenPos.y - size, 0);
+                GL.Vertex3(screenPos.x + size, screenPos.y + size, 0);
+                GL.Vertex3(screenPos.x - size, screenPos.y + size, 0);
             }
 
             GL.End();
+
+            // Draw text labels for keypoints (using OnGUI overlay)
+            if (Time.frameCount % 10 == 0)  // Draw labels less frequently for performance
+            {
+                GUI.color = poseColor;
+                for (int i = 0; i < Mathf.Min(keypoints.Length, poseLabels.Length); i++)
+                {
+                    Vector3 screenPos = transform.MultiplyPoint(keypoints[i]);
+                    if (screenPos.x > 0 && screenPos.x < Screen.width && screenPos.y > 0 && screenPos.y < Screen.height)
+                    {
+                        GUI.Label(new Rect(screenPos.x + 5, screenPos.y, 100, 20), poseLabels[i], GetLabelStyle());
+                    }
+                }
+                GUI.color = Color.white;
+            }
+
+            // Debug logging
+            if (debugMode && keypoints.Length > 0 && Time.frameCount % 60 == 0)
+            {
+                Vector3 noseScreen = transform.MultiplyPoint(keypoints[0]);
+                Debug.Log($"PoseVisualizer: Nose normalized {keypoints[0]} -> screen ({noseScreen.x:F0}, {noseScreen.y:F0})");
+                Debug.Log($"PoseVisualizer: Transform active - Aspect ratio aware display configured");
+            }
+
             GL.PopMatrix();
+        }
+
+        private Matrix4x4 CalculateImageToScreenTransform()
+        {
+            // Get camera aspect ratio (from webcam dimensions)
+            float cameraAspectRatio = (float)cameraWidth / cameraHeight;
+            float screenAspectRatio = (float)Screen.width / Screen.height;
+
+            // Calculate display area that preserves aspect ratio
+            float displayWidth, displayHeight, offsetX, offsetY;
+
+            if (cameraAspectRatio > screenAspectRatio)
+            {
+                // Camera is wider than screen - fit to width
+                displayWidth = Screen.width * 0.9f;
+                displayHeight = displayWidth / cameraAspectRatio;
+            }
+            else
+            {
+                // Camera is taller than screen - fit to height
+                displayHeight = Screen.height * 0.9f;
+                displayWidth = displayHeight * cameraAspectRatio;
+            }
+
+            // Center the display area
+            offsetX = (Screen.width - displayWidth) * 0.5f;
+            offsetY = (Screen.height - displayHeight) * 0.5f;
+
+            // Build transform matrix
+            // Normalized [0,1] coords -> Screen pixel coords
+            Matrix4x4 transform = Matrix4x4.identity;
+
+            // Scale from [0,1] to display dimensions
+            transform.m00 = displayWidth;
+            // MediaPipe Y is already flipped (Y=0 is top, Y=1 is bottom)
+            // GL.LoadPixelMatrix has (0,0) at bottom-left
+            // So we need to flip Y: negate the scale and offset from top
+            transform.m11 = -displayHeight;  // Negative to flip Y
+
+            // Translate to display position
+            transform.m03 = offsetX;
+            // Start from top of display area and go down (because of negative scale)
+            transform.m13 = offsetY + displayHeight;
+
+            if (debugMode && Time.frameCount % 300 == 0)
+            {
+                Debug.Log($"PoseVisualizer: Transform config - Camera aspect: {cameraAspectRatio:F2}, Screen aspect: {screenAspectRatio:F2}");
+                Debug.Log($"PoseVisualizer: Display {displayWidth:F0}x{displayHeight:F0} at ({offsetX:F0}, {offsetY:F0})");
+            }
+
+            return transform;
+        }
+
+        private GUIStyle GetLabelStyle()
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.label);
+            style.normal.textColor = Color.white;
+            style.fontSize = 10;
+            style.fontStyle = FontStyle.Bold;
+            return style;
         }
 
         private void DrawHandLandmarksOnGUI()
         {
-            // Get hand data
-            var leftHand = handRecognizer.GetType().GetField("leftHand", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(handRecognizer) as HandPointingRecognizer.HandData;
-            var rightHand = handRecognizer.GetType().GetField("rightHand", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(handRecognizer) as HandPointingRecognizer.HandData;
+            // Get hand landmarks
+            var landmarks = handRecognizer.LatestHandLandmarks;
+            
+            // Check if hand is detected (any non-zero landmark)
+            bool hasValidLandmarks = false;
+            if (landmarks != null && landmarks.Length > 0)
+            {
+                for (int i = 0; i < landmarks.Length; i++)
+                {
+                    if (landmarks[i] != Vector3.zero)
+                    {
+                        hasValidLandmarks = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!hasValidLandmarks) return;
 
             GL.PushMatrix();
             GL.LoadPixelMatrix();
@@ -426,17 +630,8 @@ namespace ScouterXR.UI
             GL.Begin(GL.LINES);
             GL.Color(handColor);
 
-            // Draw left hand
-            if (leftHand != null && leftHand.isDetected && leftHand.landmarks != null)
-            {
-                DrawHandSkeletonGL(leftHand.landmarks);
-            }
-
-            // Draw right hand
-            if (rightHand != null && rightHand.isDetected && rightHand.landmarks != null)
-            {
-                DrawHandSkeletonGL(rightHand.landmarks);
-            }
+            // Draw hand
+            DrawHandSkeletonGL(landmarks);
 
             GL.End();
             GL.PopMatrix();
